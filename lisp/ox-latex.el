@@ -2915,7 +2915,7 @@ contextual information."
 		      custom-env)
 	    (format-spec custom-env
 			 `((?s . ,formatted-src)
-			   (?c . ,caption)
+			   (?c . ,(org-export-data (org-export-get-caption src-block) info))
 			   (?f . ,float)
 			   (?l . ,(org-latex--label src-block info))
 			   (?o . ,(or (plist-get attributes :options) "")))))))
