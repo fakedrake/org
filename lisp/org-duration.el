@@ -1,22 +1,24 @@
 ;;; org-duration.el --- Library handling durations   -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017  Nicolas Goaziou
+;; Copyright (C) 2017-2018 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: outlines, hypermedia, calendar, wp
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -49,7 +51,6 @@
 
 (require 'cl-lib)
 (require 'org-macs)
-(declare-function org-trim "org-trim" (s &optional keep-lead))
 
 
 ;;; Public variables
@@ -97,8 +98,8 @@ sure to call the following command:
   :set (lambda (var val) (set-default var val) (org-duration-set-regexps))
   :initialize 'custom-initialize-changed
   :type '(choice
-	  (const :tag "H:MM" 'h:mm)
-	  (const :tag "H:MM:SS" 'h:mm:ss)
+	  (const :tag "H:MM" h:mm)
+	  (const :tag "H:MM:SS" h:mm:ss)
 	  (alist :key-type (string :tag "Unit")
 		 :value-type (number :tag "Modifier"))))
 
@@ -272,11 +273,13 @@ When optional argument CANONICAL is non-nil, refer to
 When optional argument CANONICAL is non-nil, ignore
 `org-duration-units' and use standard time units value.
 
-As a special case, a bare number represents minutes.
+A bare number is translated into minutes.  The empty string is
+translated into 0.0.
 
 Return value as a float.  Raise an error if duration format is
 not recognized."
   (cond
+   ((equal duration "") 0.0)
    ((numberp duration) (float duration))
    ((string-match-p org-duration--h:mm-re duration)
     (pcase-let ((`(,hours ,minutes ,seconds)
@@ -316,10 +319,11 @@ Raise an error if expected format is unknown."
      (let ((minutes (floor minutes)))
        (format "%d:%02d" (/ minutes 60) (mod minutes 60))))
     (`h:mm:ss
-     (let ((seconds (floor (* 60 minutes)) ))
+     (let* ((whole-minutes (floor minutes))
+	    (seconds (floor (* 60 (- minutes whole-minutes)))))
        (format "%s:%02d"
-	       (org-duration-from-minutes (/ seconds 60) 'h:mm)
-	       (mod seconds 60))))
+	       (org-duration-from-minutes whole-minutes 'h:mm)
+	       seconds)))
     ((pred atom) (error "Invalid duration format specification: %S" fmt))
     ;; Mixed format.  Call recursively the function on both parts.
     ((and duration-format
@@ -349,7 +353,7 @@ Raise an error if expected format is unknown."
 	   (org-duration-from-minutes minutes mode canonical)
 	 ;; Represent minutes above hour using provided units and H:MM
 	 ;; or H:MM:SS below.
-	 (let* ((units-part (* min-modifier (floor (/ minutes min-modifier))))
+	 (let* ((units-part (* min-modifier (/ (floor minutes) min-modifier)))
 		(minutes-part (- minutes units-part)))
 	   (concat
 	    (org-duration-from-minutes units-part truncated-format canonical)
@@ -397,7 +401,9 @@ Raise an error if expected format is unknown."
 	      (pcase-let* ((`(,unit . ,required?) units)
 			   (modifier (org-duration--modifier unit canonical)))
 		(cond ((<= modifier minutes)
-		       (let ((value (floor (/ minutes modifier))))
+		       (let ((value (if (integerp modifier)
+					(/ (floor minutes) modifier)
+				      (floor (/ minutes modifier)))))
 			 (cl-decf minutes (* value modifier))
 			 (format " %d%s" value unit)))
 		      (required? (concat " 0" unit))
@@ -408,11 +414,7 @@ Raise an error if expected format is unknown."
 	;; one anyway.
 	(t
 	 (pcase-let ((`((,unit . ,_)) (last selected-units)))
-	   (concat
-	    (if (not fractional) "0"
-	      (let ((modifier (org-duration--modifier unit canonical)))
-		(format fractional (/ (float minutes) modifier))))
-	    unit))))))))
+	   (concat "0" unit))))))))
 
 ;;;###autoload
 (defun org-duration-h:mm-only-p (times)

@@ -1,10 +1,10 @@
 ;;; org-compat.el --- Compatibility Code for Older Emacsen -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2018 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -19,40 +19,53 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;; Commentary:
 
 ;; This file contains code needed for compatibility with older
-;; versions of GNU Emacs.
+;; versions of GNU Emacs and integration with other packages.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'org-macs)
 
-(declare-function org-at-table.el-p "org" (&optional table-type))
+(declare-function org-agenda-diary-entry "org-agenda")
+(declare-function org-agenda-maybe-redo "org-agenda" ())
+(declare-function org-at-heading-p "org" (&optional ignored))
+(declare-function org-at-table.el-p "org" ())
 (declare-function org-element-at-point "org-element" ())
+(declare-function org-element-context "org-element" (&optional element))
+(declare-function org-element-lineage "org-element" (blob &optional types with-self))
 (declare-function org-element-type "org-element" (element))
+(declare-function org-element-property "org-element" (property element))
 (declare-function org-end-of-subtree "org" (&optional invisible-ok to-heading))
+(declare-function org-invisible-p "org" (&optional pos))
+(declare-function org-link-display-format "org" (s))
 (declare-function org-link-set-parameters "org" (type &rest rest))
-(declare-function org-table-end (&optional table-type))
+(declare-function org-log-into-drawer "org" ())
+(declare-function org-reduced-level "org" (l))
+(declare-function org-show-context "org" (&optional key))
+(declare-function org-table-end "org-table" (&optional table-type))
 (declare-function outline-next-heading "outline" ())
+(declare-function speedbar-line-directory "speedbar" (&optional depth))
 (declare-function table--at-cell-p "table" (position &optional object at-column))
 
+(defvar org-complex-heading-regexp)
 (defvar org-table-any-border-regexp)
 (defvar org-table-dataline-regexp)
 (defvar org-table-tab-recognizes-table.el)
 (defvar org-table1-hline-regexp)
 
+
 ;;; Emacs < 25.1 compatibility
 
 (when (< emacs-major-version 25)
   (defalias 'outline-hide-entry 'hide-entry)
   (defalias 'outline-hide-sublevels 'hide-sublevels)
   (defalias 'outline-hide-subtree 'hide-subtree)
-  (defalias 'outline-show-all 'show-all)
   (defalias 'outline-show-branches 'show-branches)
   (defalias 'outline-show-children 'show-children)
   (defalias 'outline-show-entry 'show-entry)
@@ -60,6 +73,12 @@
   (defalias 'xref-find-definitions 'find-tag)
   (defalias 'format-message 'format)
   (defalias 'gui-get-selection 'x-get-selection))
+
+(defun org-decode-time (&optional time zone)
+  "Backward-compatible function for `decode-time'."
+  (if (< emacs-major-version 25)
+      (decode-time time)
+    (decode-time time zone)))
 
 (unless (fboundp 'directory-name-p)
   (defun directory-name-p (name)
@@ -104,7 +123,7 @@ output directories whose names match REGEXP."
       (nconc result (nreverse files)))))
 
 
-;;; Obsolete aliases (remove them once the next major release is released).
+;;; Obsolete aliases (remove them after the next major release).
 
 ;;;; XEmacs compatibility, now removed.
 (define-obsolete-function-alias 'org-activate-mark 'activate-mark)
@@ -204,6 +223,10 @@ Counting starts at 1."
   'org-columns-insert-dblock "Org 9.0")
 (define-obsolete-variable-alias 'org-export-babel-evaluate
   'org-export-use-babel "Org 9.1")
+(define-obsolete-function-alias 'org-activate-bracket-links
+  'org-activate-links "Org 9.0")
+(define-obsolete-function-alias 'org-activate-plain-links 'ignore "Org 9.0")
+(define-obsolete-function-alias 'org-activate-angle-links 'ignore "Org 9.0")
 
 (defun org-in-fixed-width-region-p ()
   "Non-nil if point in a fixed-width region."
@@ -365,6 +388,27 @@ use of this function is for the stuck project list."
 (define-obsolete-function-alias 'org-babel-number-p
   'org-babel--string-to-number "Org 9.0")
 
+(define-obsolete-variable-alias 'org-usenet-links-prefer-google
+  'org-gnus-prefer-web-links "Org 9.1")
+
+(define-obsolete-variable-alias 'org-texinfo-def-table-markup
+  'org-texinfo-table-default-markup "Org 9.1")
+
+;; The function was made obsolete by commit 65399674d5 of 2013-02-22.
+;; This make-obsolete call was added 2016-09-01.
+(make-obsolete 'org-capture-import-remember-templates
+	       "use the `org-capture-templates' variable instead."
+	       "Org 9.0")
+
+(defun org-show-block-all ()
+  "Unfold all blocks in the current buffer."
+  (interactive)
+  (remove-overlays nil nil 'invisible 'org-hide-block))
+
+(make-obsolete 'org-show-block-all
+	       "use `org-show-all' instead."
+	       "Org 9.2")
+
 
 ;;;; Obsolete link types
 
@@ -414,15 +458,6 @@ use of this function is for the stuck project list."
         ((and (eq window-system 'w32) (fboundp 'w32-get-clipboard-data))
          (w32-get-clipboard-data))))
 
-(defun org-add-props (string plist &rest props)
-  "Add text properties to entire string, from beginning to end.
-PLIST may be a list of properties, PROPS are individual properties and values
-that will be added to PLIST.  Returns the string that was modified."
-  (add-text-properties
-   0 (length string) (if props (append plist props) plist) string)
-  string)
-(put 'org-add-props 'lisp-indent-function 2)
-
 (defun org-fit-window-to-buffer (&optional window max-height min-height
                                            shrink-only)
   "Fit WINDOW to the buffer, but only if it is not a side-by-side window.
@@ -446,6 +481,7 @@ ignored in this case."
       'set-transient-map
     'set-temporary-overlay-map))
 
+
 ;;; Region compatibility
 
 (defvar org-ignore-region nil
@@ -462,6 +498,7 @@ Unlike to `use-region-p', this function also checks
              (> (point) (region-beginning)))
     (exchange-point-and-mark)))
 
+
 ;;; Invisibility compatibility
 
 (defun org-remove-from-invisibility-spec (arg)
@@ -552,7 +589,9 @@ effect, which variables to use depends on the Emacs version."
     `(org-unmodified ,@body)))
 (def-edebug-spec org-with-silent-modifications (body))
 
-;; Functions for Emacs < 24.4 compatibility
+
+;;; Functions for Emacs < 24.4 compatibility
+
 (defun org-define-error (name message)
   "Define NAME as a new error signal.
 MESSAGE is a string that will be output to the echo area if such
@@ -572,6 +611,331 @@ attention to case differences."
       (and (>= start-pos 0)
            (eq t (compare-strings suffix nil nil
                                   string start-pos nil ignore-case))))))
+
+
+;;; Integration with and fixes for other packages
+
+(defgroup org-imenu-and-speedbar nil
+  "Options concerning imenu and speedbar in Org mode."
+  :tag "Org Imenu and Speedbar"
+  :group 'org-structure)
+
+(defcustom org-imenu-depth 2
+  "The maximum level for Imenu access to Org headlines.
+This also applied for speedbar access."
+  :group 'org-imenu-and-speedbar
+  :type 'integer)
+
+;;;; Imenu
+
+(defvar-local org-imenu-markers nil
+  "All markers currently used by Imenu.")
+
+(defun org-imenu-new-marker (&optional pos)
+  "Return a new marker for use by Imenu, and remember the marker."
+  (let ((m (make-marker)))
+    (move-marker m (or pos (point)))
+    (push m org-imenu-markers)
+    m))
+
+(defun org-imenu-get-tree ()
+  "Produce the index for Imenu."
+  (dolist (x org-imenu-markers) (move-marker x nil))
+  (setq org-imenu-markers nil)
+  (let* ((case-fold-search nil)
+	 (n org-imenu-depth)
+	 (re (concat "^" (org-get-limited-outline-regexp)))
+	 (subs (make-vector (1+ n) nil))
+	 (last-level 0)
+	 m level head0 head)
+    (org-with-wide-buffer
+     (goto-char (point-max))
+     (while (re-search-backward re nil t)
+       (setq level (org-reduced-level (funcall outline-level)))
+       (when (and (<= level n)
+		  (looking-at org-complex-heading-regexp)
+		  (setq head0 (match-string-no-properties 4)))
+	 (setq head (org-link-display-format head0)
+	       m (org-imenu-new-marker))
+	 (org-add-props head nil 'org-imenu-marker m 'org-imenu t)
+	 (if (>= level last-level)
+	     (push (cons head m) (aref subs level))
+	   (push (cons head (aref subs (1+ level))) (aref subs level))
+	   (cl-loop for i from (1+ level) to n do (aset subs i nil)))
+	 (setq last-level level))))
+    (aref subs 1)))
+
+(eval-after-load "imenu"
+  '(progn
+     (add-hook 'imenu-after-jump-hook
+	       (lambda ()
+		 (when (derived-mode-p 'org-mode)
+		   (org-show-context 'org-goto))))))
+
+;;;; Speedbar
+
+(defvar org-speedbar-restriction-lock-overlay (make-overlay 1 1)
+  "Overlay marking the agenda restriction line in speedbar.")
+(overlay-put org-speedbar-restriction-lock-overlay
+	     'face 'org-agenda-restriction-lock)
+(overlay-put org-speedbar-restriction-lock-overlay
+	     'help-echo "Agendas are currently limited to this item.")
+(delete-overlay org-speedbar-restriction-lock-overlay)
+
+(defun org-speedbar-set-agenda-restriction ()
+  "Restrict future agenda commands to the location at point in speedbar.
+To get rid of the restriction, use `\\[org-agenda-remove-restriction-lock]'."
+  (interactive)
+  (require 'org-agenda)
+  (let (p m tp np dir txt)
+    (cond
+     ((setq p (text-property-any (point-at-bol) (point-at-eol)
+				 'org-imenu t))
+      (setq m (get-text-property p 'org-imenu-marker))
+      (with-current-buffer (marker-buffer m)
+	(goto-char m)
+	(org-agenda-set-restriction-lock 'subtree)))
+     ((setq p (text-property-any (point-at-bol) (point-at-eol)
+				 'speedbar-function 'speedbar-find-file))
+      (setq tp (previous-single-property-change
+		(1+ p) 'speedbar-function)
+	    np (next-single-property-change
+		tp 'speedbar-function)
+	    dir (speedbar-line-directory)
+	    txt (buffer-substring-no-properties (or tp (point-min))
+						(or np (point-max))))
+      (with-current-buffer (find-file-noselect
+			    (let ((default-directory dir))
+			      (expand-file-name txt)))
+	(unless (derived-mode-p 'org-mode)
+	  (user-error "Cannot restrict to non-Org mode file"))
+	(org-agenda-set-restriction-lock 'file)))
+     (t (user-error "Don't know how to restrict Org mode agenda")))
+    (move-overlay org-speedbar-restriction-lock-overlay
+		  (point-at-bol) (point-at-eol))
+    (setq current-prefix-arg nil)
+    (org-agenda-maybe-redo)))
+
+(defvar speedbar-file-key-map)
+(declare-function speedbar-add-supported-extension "speedbar" (extension))
+(eval-after-load "speedbar"
+  '(progn
+     (speedbar-add-supported-extension ".org")
+     (define-key speedbar-file-key-map "<" 'org-speedbar-set-agenda-restriction)
+     (define-key speedbar-file-key-map "\C-c\C-x<" 'org-speedbar-set-agenda-restriction)
+     (define-key speedbar-file-key-map ">" 'org-agenda-remove-restriction-lock)
+     (define-key speedbar-file-key-map "\C-c\C-x>" 'org-agenda-remove-restriction-lock)
+     (add-hook 'speedbar-visiting-tag-hook
+	       (lambda () (and (derived-mode-p 'org-mode) (org-show-context 'org-goto))))))
+
+;;;; Flyspell
+
+(defun org--flyspell-object-check-p (element)
+  "Non-nil when Flyspell can check object at point.
+ELEMENT is the element at point."
+  (let ((object (save-excursion
+		  (when (looking-at-p "\\>") (backward-char))
+		  (org-element-context element))))
+    (cl-case (org-element-type object)
+      ;; Prevent checks in links due to keybinding conflict with
+      ;; Flyspell.
+      ((code entity export-snippet inline-babel-call
+	     inline-src-block line-break latex-fragment link macro
+	     statistics-cookie target timestamp verbatim)
+       nil)
+      (footnote-reference
+       ;; Only in inline footnotes, within the definition.
+       (and (eq (org-element-property :type object) 'inline)
+	    (< (save-excursion
+		 (goto-char (org-element-property :begin object))
+		 (search-forward ":" nil t 2))
+	       (point))))
+      (otherwise t))))
+
+(defun org-mode-flyspell-verify ()
+  "Function used for `flyspell-generic-check-word-predicate'."
+  (if (org-at-heading-p)
+      ;; At a headline or an inlinetask, check title only.  This is
+      ;; faster than relying on `org-element-at-point'.
+      (and (save-excursion (beginning-of-line)
+			   (and (let ((case-fold-search t))
+				  (not (looking-at-p "\\*+ END[ \t]*$")))
+				(let ((case-fold-search nil))
+				  (looking-at org-complex-heading-regexp))))
+	   (match-beginning 4)
+	   (>= (point) (match-beginning 4))
+	   (or (not (match-beginning 5))
+	       (< (point) (match-beginning 5))))
+    (let* ((element (org-element-at-point))
+	   (post-affiliated (org-element-property :post-affiliated element)))
+      (cond
+       ;; Ignore checks in all affiliated keywords but captions.
+       ((< (point) post-affiliated)
+	(and (save-excursion
+	       (beginning-of-line)
+	       (let ((case-fold-search t)) (looking-at "[ \t]*#\\+CAPTION:")))
+	     (> (point) (match-end 0))
+	     (org--flyspell-object-check-p element)))
+       ;; Ignore checks in LOGBOOK (or equivalent) drawer.
+       ((let ((log (org-log-into-drawer)))
+	  (and log
+	       (let ((drawer (org-element-lineage element '(drawer))))
+		 (and drawer
+		      (eq (compare-strings
+			   log nil nil
+			   (org-element-property :drawer-name drawer) nil nil t)
+			  t)))))
+	nil)
+       (t
+	(cl-case (org-element-type element)
+	  ((comment quote-section) t)
+	  (comment-block
+	   ;; Allow checks between block markers, not on them.
+	   (and (> (line-beginning-position) post-affiliated)
+		(save-excursion
+		  (end-of-line)
+		  (skip-chars-forward " \r\t\n")
+		  (< (point) (org-element-property :end element)))))
+	  ;; Arbitrary list of keywords where checks are meaningful.
+	  ;; Make sure point is on the value part of the element.
+	  (keyword
+	   (and (member (org-element-property :key element)
+			'("DESCRIPTION" "TITLE"))
+		(save-excursion
+		  (search-backward ":" (line-beginning-position) t))))
+	  ;; Check is globally allowed in paragraphs verse blocks and
+	  ;; table rows (after affiliated keywords) but some objects
+	  ;; must not be affected.
+	  ((paragraph table-row verse-block)
+	   (let ((cbeg (org-element-property :contents-begin element))
+		 (cend (org-element-property :contents-end element)))
+	     (and cbeg (>= (point) cbeg) (< (point) cend)
+		  (org--flyspell-object-check-p element))))))))))
+(put 'org-mode 'flyspell-mode-predicate 'org-mode-flyspell-verify)
+
+(defun org-remove-flyspell-overlays-in (beg end)
+  "Remove flyspell overlays in region."
+  (and (bound-and-true-p flyspell-mode)
+       (fboundp 'flyspell-delete-region-overlays)
+       (flyspell-delete-region-overlays beg end)))
+
+(defvar flyspell-delayed-commands)
+(eval-after-load "flyspell"
+  '(add-to-list 'flyspell-delayed-commands 'org-self-insert-command))
+
+;;;; Bookmark
+
+(defun org-bookmark-jump-unhide ()
+  "Unhide the current position, to show the bookmark location."
+  (and (derived-mode-p 'org-mode)
+       (or (org-invisible-p)
+	   (save-excursion (goto-char (max (point-min) (1- (point))))
+			   (org-invisible-p)))
+       (org-show-context 'bookmark-jump)))
+
+;; Make `bookmark-jump' shows the jump location if it was hidden.
+(eval-after-load "bookmark"
+  '(if (boundp 'bookmark-after-jump-hook)
+       ;; We can use the hook
+       (add-hook 'bookmark-after-jump-hook 'org-bookmark-jump-unhide)
+     ;; Hook not available, use advice
+     (defadvice bookmark-jump (after org-make-visible activate)
+       "Make the position visible."
+       (org-bookmark-jump-unhide))))
+
+;;;; Calendar
+
+(defcustom org-calendar-to-agenda-key 'default
+  "Key to be installed in `calendar-mode-map' for switching to the agenda.
+
+The command `org-calendar-goto-agenda' will be bound to this key.
+
+When set to `default', bind the function to `c', but only if it is
+available in the Calendar keymap.  This is the default choice because
+`c' can then be used to switch back and forth between agenda and calendar.
+
+When nil, `org-calendar-goto-agenda' is not bound to any key."
+  :group 'org-agenda
+  :type '(choice
+	  (const :tag "Bind to `c' if available" default)
+	  (key-sequence :tag "Other binding")
+	  (const :tag "No binding" nil))
+  :safe (lambda (v) (or (symbolp v) (stringp v)))
+  :package-version '(Org . "9.2"))
+
+(defcustom org-calendar-insert-diary-entry-key [?i]
+  "The key to be installed in `calendar-mode-map' for adding diary entries.
+This option is irrelevant until `org-agenda-diary-file' has been configured
+to point to an Org file.  When that is the case, the command
+`org-agenda-diary-entry' will be bound to the key given here, by default
+`i'.  In the calendar, `i' normally adds entries to `diary-file'.  So
+if you want to continue doing this, you need to change this to a different
+key."
+  :group 'org-agenda
+  :type 'sexp)
+
+(defun org--setup-calendar-bindings ()
+  "Bind Org functions in Calendar keymap."
+  (pcase org-calendar-to-agenda-key
+    (`nil nil)
+    ((and key (pred stringp))
+     (local-set-key (kbd key) #'org-calendar-goto-agenda))
+    ((guard (not (lookup-key calendar-mode-map "c")))
+     (local-set-key "c" #'org-calendar-goto-agenda))
+    (_ nil))
+  (unless (eq org-agenda-diary-file 'diary-file)
+    (local-set-key org-calendar-insert-diary-entry-key
+		   #'org-agenda-diary-entry)))
+
+(eval-after-load "calendar"
+  '(add-hook 'calendar-mode-hook #'org--setup-calendar-bindings))
+
+;;;; Saveplace
+
+;; Make sure saveplace shows the location if it was hidden
+(eval-after-load "saveplace"
+  '(defadvice save-place-find-file-hook (after org-make-visible activate)
+     "Make the position visible."
+     (org-bookmark-jump-unhide)))
+
+;;;; Ecb
+
+;; Make sure ecb shows the location if it was hidden
+(eval-after-load "ecb"
+  '(defadvice ecb-method-clicked (after esf/org-show-context activate)
+     "Make hierarchy visible when jumping into location from ECB tree buffer."
+     (when (derived-mode-p 'org-mode)
+       (org-show-context))))
+
+;;;; Simple
+
+(defun org-mark-jump-unhide ()
+  "Make the point visible with `org-show-context' after jumping to the mark."
+  (when (and (derived-mode-p 'org-mode)
+	     (org-invisible-p))
+    (org-show-context 'mark-goto)))
+
+(eval-after-load "simple"
+  '(defadvice pop-to-mark-command (after org-make-visible activate)
+     "Make the point visible with `org-show-context'."
+     (org-mark-jump-unhide)))
+
+(eval-after-load "simple"
+  '(defadvice exchange-point-and-mark (after org-make-visible activate)
+     "Make the point visible with `org-show-context'."
+     (org-mark-jump-unhide)))
+
+(eval-after-load "simple"
+  '(defadvice pop-global-mark (after org-make-visible activate)
+     "Make the point visible with `org-show-context'."
+     (org-mark-jump-unhide)))
+
+;;;; Session
+
+;; Make "session.el" ignore our circular variable.
+(defvar session-globals-exclude)
+(eval-after-load "session"
+  '(add-to-list 'session-globals-exclude 'org-mark-ring))
 
 (provide 'org-compat)
 

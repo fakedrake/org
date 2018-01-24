@@ -90,86 +90,87 @@
   (should
    (equal "# \nComment"
 	  (org-test-with-temp-text "Comment"
-	    (progn (call-interactively 'comment-dwim)
-		   (buffer-string)))))
+	    (call-interactively #'org-comment-dwim)
+	    (buffer-string))))
   ;; No region selected, no comment on current line and line empty:
   ;; insert comment on this line.
   (should
    (equal "# \nParagraph"
 	  (org-test-with-temp-text "\nParagraph"
-	    (progn (call-interactively 'comment-dwim)
-		   (buffer-string)))))
+	    (call-interactively #'org-comment-dwim)
+	    (buffer-string))))
   ;; No region selected, and a comment on this line: indent it.
   (should
    (equal "* Headline\n  # Comment"
-	  (org-test-with-temp-text "* Headline\n# Comment"
-	    (progn (forward-line)
-		   (let ((org-adapt-indentation t))
-		     (call-interactively 'comment-dwim))
-		   (buffer-string)))))
+	  (org-test-with-temp-text "* Headline\n# <point>Comment"
+	    (let ((org-adapt-indentation t))
+	      (call-interactively #'org-comment-dwim))
+	    (buffer-string))))
   ;; Also recognize single # at column 0 as comments.
   (should
    (equal "# Comment"
 	  (org-test-with-temp-text "# Comment"
-	    (progn (forward-line)
-		   (call-interactively 'comment-dwim)
-		   (buffer-string)))))
+	    (call-interactively #'org-comment-dwim)
+	    (buffer-string))))
   ;; Region selected and only comments and blank lines within it:
   ;; un-comment all commented lines.
   (should
    (equal "Comment 1\n\nComment 2"
 	  (org-test-with-temp-text "# Comment 1\n\n# Comment 2"
-	    (progn
-	      (transient-mark-mode 1)
-	      (push-mark (point) t t)
-	      (goto-char (point-max))
-	      (call-interactively 'comment-dwim)
-	      (buffer-string)))))
+	    (transient-mark-mode 1)
+	    (push-mark (point) t t)
+	    (goto-char (point-max))
+	    (call-interactively #'org-comment-dwim)
+	    (buffer-string))))
   ;; Region selected without comments: comment all lines if
   ;; `comment-empty-lines' is non-nil, only non-blank lines otherwise.
   (should
    (equal "# Comment 1\n\n# Comment 2"
 	  (org-test-with-temp-text "Comment 1\n\nComment 2"
-	    (progn
-	      (transient-mark-mode 1)
-	      (push-mark (point) t t)
-	      (goto-char (point-max))
-	      (let ((comment-empty-lines nil))
-		(call-interactively 'comment-dwim))
-	      (buffer-string)))))
+	    (transient-mark-mode 1)
+	    (push-mark (point) t t)
+	    (goto-char (point-max))
+	    (let ((comment-empty-lines nil))
+	      (call-interactively #'org-comment-dwim))
+	    (buffer-string))))
   (should
    (equal "# Comment 1\n# \n# Comment 2"
 	  (org-test-with-temp-text "Comment 1\n\nComment 2"
-	    (progn
-	      (transient-mark-mode 1)
-	      (push-mark (point) t t)
-	      (goto-char (point-max))
-	      (let ((comment-empty-lines t))
-		(call-interactively 'comment-dwim))
-	      (buffer-string)))))
+	    (transient-mark-mode 1)
+	    (push-mark (point) t t)
+	    (goto-char (point-max))
+	    (let ((comment-empty-lines t))
+	      (call-interactively #'org-comment-dwim))
+	    (buffer-string))))
   ;; In front of a keyword without region, insert a new comment.
   (should
    (equal "# \n#+KEYWORD: value"
 	  (org-test-with-temp-text "#+KEYWORD: value"
-	    (progn (call-interactively 'comment-dwim)
-		   (buffer-string)))))
+	    (call-interactively #'org-comment-dwim)
+	    (buffer-string))))
+  ;; Comment a heading
+  (should
+   (equal "* COMMENT Test"
+	  (org-test-with-temp-text "* Test"
+	    (call-interactively #'org-comment-dwim)
+	    (buffer-string))))
   ;; In a source block, use appropriate syntax.
   (should
    (equal "  ;; "
-	  (org-test-with-temp-text "#+BEGIN_SRC emacs-lisp\n\n#+END_SRC"
-	    (forward-line)
+	  (org-test-with-temp-text "#+BEGIN_SRC emacs-lisp\n<point>\n#+END_SRC"
 	    (let ((org-edit-src-content-indentation 2))
-	      (call-interactively 'comment-dwim))
-	    (buffer-substring-no-properties (line-beginning-position) (point)))))
+	      (call-interactively #'org-comment-dwim))
+	    (buffer-substring-no-properties (line-beginning-position)
+					    (point)))))
   (should
    (equal "#+BEGIN_SRC emacs-lisp\n  ;; a\n  ;; b\n#+END_SRC"
-	  (org-test-with-temp-text "#+BEGIN_SRC emacs-lisp\na\nb\n#+END_SRC"
-	    (forward-line)
+	  (org-test-with-temp-text
+	      "#+BEGIN_SRC emacs-lisp\n<point>a\nb\n#+END_SRC"
 	    (transient-mark-mode 1)
 	    (push-mark (point) t t)
 	    (forward-line 2)
 	    (let ((org-edit-src-content-indentation 2))
-	      (call-interactively 'comment-dwim))
+	      (call-interactively #'org-comment-dwim))
 	    (buffer-string)))))
 
 
@@ -375,7 +376,9 @@
   "Test `org-deadline-close-p' specifications."
   ;; Pretend that the current time is 2016-06-03 Fri 01:43
   (cl-letf (((symbol-function 'current-time)
-	     (lambda () '(22353 6425 905205 644000))))
+	     (lambda ()
+	       (apply #'encode-time
+		      (org-parse-time-string "2016-06-03 Fri 01:43")))))
     ;; Timestamps are close if they are within `ndays' of lead time.
     (org-test-with-temp-text "* Heading"
       (should (org-deadline-close-p "2016-06-03 Fri" 0))
@@ -456,23 +459,23 @@
 
 ;;; Filling
 
-(ert-deftest test-org/fill-paragraph ()
-  "Test `org-fill-paragraph' specifications."
+(ert-deftest test-org/fill-element ()
+  "Test `org-fill-element' specifications."
   ;; At an Org table, align it.
   (should
    (equal "| a |\n"
 	  (org-test-with-temp-text "|a|"
-	    (org-fill-paragraph)
+	    (org-fill-element)
 	    (buffer-string))))
   (should
    (equal "#+name: table\n| a |\n"
 	  (org-test-with-temp-text "#+name: table\n| a |\n"
-	    (org-fill-paragraph)
+	    (org-fill-element)
 	    (buffer-string))))
   ;; At a paragraph, preserve line breaks.
   (org-test-with-temp-text "some \\\\\nlong\ntext"
     (let ((fill-column 20))
-      (org-fill-paragraph)
+      (org-fill-element)
       (should (equal (buffer-string) "some \\\\\nlong text"))))
   ;; Correctly fill a paragraph when point is at its very end.
   (should
@@ -480,7 +483,7 @@
 	  (org-test-with-temp-text "A\nB"
 	    (let ((fill-column 20))
 	      (goto-char (point-max))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Correctly fill the last paragraph of a greater element.
   (should
@@ -489,7 +492,7 @@
 	    (let ((fill-column 8))
 	      (forward-line)
 	      (end-of-line)
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Correctly fill an element in a narrowed buffer.
   (should
@@ -497,7 +500,7 @@
 	  (org-test-with-temp-text "01234 6789"
 	    (let ((fill-column 5))
 	      (narrow-to-region 1 8)
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Handle `adaptive-fill-regexp' in paragraphs.
   (should
@@ -505,7 +508,7 @@
 	  (org-test-with-temp-text "> a\n> b"
 	    (let ((fill-column 5)
 		  (adaptive-fill-regexp "[ \t]*>+[ \t]*"))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Special case: Fill first paragraph when point is at an item or
   ;; a plain-list or a footnote reference.
@@ -513,17 +516,17 @@
    (equal "- A B"
 	  (org-test-with-temp-text "- A\n  B"
 	    (let ((fill-column 20))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   (should
    (equal "[fn:1] A B"
 	  (org-test-with-temp-text "[fn:1] A\nB"
 	    (let ((fill-column 20))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   (org-test-with-temp-text "#+BEGIN_VERSE\nSome \\\\\nlong\ntext\n#+END_VERSE"
     (let ((fill-column 20))
-      (org-fill-paragraph)
+      (org-fill-element)
       (should (equal (buffer-string)
 		     "#+BEGIN_VERSE\nSome \\\\\nlong\ntext\n#+END_VERSE"))))
   ;; Fill contents of `comment-block' elements.
@@ -532,7 +535,7 @@
     (org-test-with-temp-text "#+BEGIN_COMMENT\nSome\ntext\n#+END_COMMENT"
       (let ((fill-column 20))
 	(forward-line)
-	(org-fill-paragraph)
+	(org-fill-element)
 	(buffer-string)))
     "#+BEGIN_COMMENT\nSome text\n#+END_COMMENT"))
   ;; Fill `comment' elements.
@@ -540,21 +543,21 @@
    (equal "  # A B"
 	  (org-test-with-temp-text "  # A\n  # B"
 	    (let ((fill-column 20))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Do not mix consecutive comments when filling one of them.
   (should
    (equal "# A B\n\n# C"
 	  (org-test-with-temp-text "# A\n# B\n\n# C"
 	    (let ((fill-column 20))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Use commented empty lines as separators when filling comments.
   (should
    (equal "# A B\n#\n# C"
 	  (org-test-with-temp-text "# A\n# B\n#\n# C"
 	    (let ((fill-column 20))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Handle `adaptive-fill-regexp' in comments.
   (should
@@ -562,19 +565,48 @@
 	  (org-test-with-temp-text "# > a\n# > b"
 	    (let ((fill-column 20)
 		  (adaptive-fill-regexp "[ \t]*>+[ \t]*"))
-	      (org-fill-paragraph)
+	      (org-fill-element)
 	      (buffer-string)))))
   ;; Do nothing at affiliated keywords.
-  (org-test-with-temp-text "#+NAME: para\nSome\ntext."
-    (let ((fill-column 20))
-      (org-fill-paragraph)
-      (should (equal (buffer-string) "#+NAME: para\nSome\ntext."))))
+  (should
+   (equal "#+NAME: para\nSome\ntext."
+	  (org-test-with-temp-text "#+NAME: para\nSome\ntext."
+	    (let ((fill-column 20))
+	      (org-fill-element)
+	      (buffer-string)))))
   ;; Do not move point after table when filling a table.
   (should-not
    (org-test-with-temp-text "| a | b |\n| c | d |\n"
      (forward-char)
-     (org-fill-paragraph)
-     (eobp))))
+     (org-fill-element)
+     (eobp)))
+  ;; Do not fill "n" macro, with or without arguments, followed by
+  ;; a dot or a closing parenthesis since it could be confused with
+  ;; a numbered bullet.
+  (should-not
+   (equal "123456789\n{{{n}}}."
+	  (org-test-with-temp-text "123456789 {{{n}}}."
+	    (let ((fill-column 10))
+	      (org-fill-element)
+	      (buffer-string)))))
+  (should-not
+   (equal "123456789\n{{{n}}}\)"
+	  (org-test-with-temp-text "123456789 {{{n}}}\)"
+	    (let ((fill-column 10))
+	      (org-fill-element)
+	      (buffer-string)))))
+  (should-not
+   (equal "123456789\n{{{n()}}}."
+	  (org-test-with-temp-text "123456789 {{{n()}}}."
+	    (let ((fill-column 10))
+	      (org-fill-element)
+	      (buffer-string)))))
+  (should-not
+   (equal "123456789\n{{{n(counter)}}}."
+	  (org-test-with-temp-text "123456789 {{{n(counter)}}}."
+	    (let ((fill-column 10))
+	      (org-fill-element)
+	      (buffer-string))))))
 
 (ert-deftest test-org/auto-fill-function ()
   "Test auto-filling features."
@@ -1153,6 +1185,18 @@
    (equal "* h\n"
 	  (org-test-with-temp-text "*<point> h"
 	    (org-return)
+	    (buffer-string))))
+  ;; Before first column or after last one in a table, split the
+  ;; table.
+  (should
+   (equal "| a |\n\n| b |"
+	  (org-test-with-temp-text "| a |\n<point>| b |"
+	    (org-return)
+	    (buffer-string))))
+  (should
+   (equal "| a |\n\n| b |"
+	  (org-test-with-temp-text "| a |<point>\n| b |"
+	    (org-return)
 	    (buffer-string)))))
 
 (ert-deftest test-org/meta-return ()
@@ -1384,6 +1428,13 @@
     "* TODO \n"
     (org-test-with-temp-text "* H\n- an item\n- another one"
       (search-forward "an ")
+      (org-insert-todo-heading-respect-content)
+      (buffer-substring-no-properties (line-beginning-position) (point-max)))))
+  ;; Use the same TODO keyword as current heading.
+  (should
+   (equal
+    "* TODO \n"
+    (org-test-with-temp-text "* TODO\n** WAITING\n"
       (org-insert-todo-heading-respect-content)
       (buffer-substring-no-properties (line-beginning-position) (point-max))))))
 
@@ -1750,12 +1801,12 @@
   (should
    (equal '("Org")
 	  (org-test-with-temp-text
-	      "* [[http://orgmode.org][Org]]\n** S<point>"
+	      "* [[https://orgmode.org][Org]]\n** S<point>"
 	    (org-get-outline-path))))
   (should
-   (equal '("http://orgmode.org")
+   (equal '("https://orgmode.org")
 	  (org-test-with-temp-text
-	      "* [[http://orgmode.org]]\n** S<point>"
+	      "* [[https://orgmode.org]]\n** S<point>"
 	    (org-get-outline-path))))
   ;; When WITH-SELF is non-nil, include current heading.
   (should
@@ -2392,14 +2443,18 @@ http://article.gmane.org/gmane.emacs.orgmode/21459/"
 
 ;;;; Open at point
 
-(ert-deftest test-org/open-at-point-in-keyword ()
+(ert-deftest test-org/open-at-point/keyword ()
   "Does `org-open-at-point' open link in a keyword line?"
   (should
    (org-test-with-temp-text
        "<<top>>\n#+KEYWORD: <point>[[top]]"
+     (org-open-at-point) t))
+  (should
+   (org-test-with-temp-text
+       "* H\n<<top>>\n#+KEYWORD: <point>[[top]]"
      (org-open-at-point) t)))
 
-(ert-deftest test-org/open-at-point-in-property ()
+(ert-deftest test-org/open-at-point/property ()
   "Does `org-open-at-point' open link in property drawer?"
   (should
    (org-test-with-temp-text
@@ -2409,11 +2464,15 @@ http://article.gmane.org/gmane.emacs.orgmode/21459/"
 :END:"
      (org-open-at-point) t)))
 
-(ert-deftest test-org/open-at-point-in-comment ()
+(ert-deftest test-org/open-at-point/comment ()
   "Does `org-open-at-point' open link in a commented line?"
   (should
    (org-test-with-temp-text
     "<<top>>\n# <point>[[top]]"
+    (org-open-at-point) t))
+  (should
+   (org-test-with-temp-text
+    "* H\n<<top>>\n# <point>[[top]]"
     (org-open-at-point) t)))
 
 (ert-deftest test-org/open-at-point/inline-image ()
@@ -2430,6 +2489,23 @@ http://article.gmane.org/gmane.emacs.orgmode/21459/"
      (org-update-radio-target-regexp)
      (org-open-at-point)
      (eq (org-element-type (org-element-context)) 'radio-target))))
+
+(ert-deftest test-org/open-at-point/tag ()
+  "Test `org-open-at-point' on tags."
+  (should
+   (org-test-with-temp-text "* H :<point>tag:"
+     (catch :result
+       (cl-letf (((symbol-function 'org-tags-view)
+		  (lambda (&rest args) (throw :result t))))
+	 (org-open-at-point)
+	 nil))))
+  (should-not
+   (org-test-with-temp-text-in-file "* H<point> :tag:"
+     (catch :result
+       (cl-letf (((symbol-function 'org-tags-view)
+		  (lambda (&rest args) (throw :result t))))
+	 (org-open-at-point)
+	 nil)))))
 
 ;;;; Stored links
 
@@ -2472,7 +2548,82 @@ http://article.gmane.org/gmane.emacs.orgmode/21459/"
      (org-test-with-temp-text-in-file "#+NAME: foo\nParagraph"
        (let ((file (buffer-file-name)))
 	 (equal (format "[[file:%s::foo][foo]]" file)
-		(org-store-link nil)))))))
+		(org-store-link nil))))))
+  ;; Store link to Org buffer, with context.
+  (should
+   (let ((org-stored-links nil)
+	 (org-id-link-to-org-use-id nil)
+	 (org-context-in-file-links t))
+     (org-test-with-temp-text-in-file "* h1"
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s::*h1][h1]]" file)
+		(org-store-link nil))))))
+  ;; Store link to Org buffer, without context.
+  (should
+   (let ((org-stored-links nil)
+	 (org-id-link-to-org-use-id nil)
+	 (org-context-in-file-links nil))
+     (org-test-with-temp-text-in-file "* h1"
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s][file:%s]]" file file)
+		(org-store-link nil))))))
+  ;; C-u prefix reverses `org-context-in-file-links' in Org buffer.
+  (should
+   (let ((org-stored-links nil)
+	 (org-id-link-to-org-use-id nil)
+	 (org-context-in-file-links nil))
+     (org-test-with-temp-text-in-file "* h1"
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s::*h1][h1]]" file)
+		(org-store-link '(4)))))))
+  ;; A C-u C-u does *not* reverse `org-context-in-file-links' in Org
+  ;; buffer.
+  (should
+   (let ((org-stored-links nil)
+	 (org-id-link-to-org-use-id nil)
+	 (org-context-in-file-links nil))
+     (org-test-with-temp-text-in-file "* h1"
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s][file:%s]]" file file)
+		(org-store-link '(16)))))))
+  ;; Store file link to non-Org buffer, with context.
+  (should
+   (let ((org-stored-links nil)
+	 (org-context-in-file-links t))
+     (org-test-with-temp-text-in-file "one\n<point>two"
+       (fundamental-mode)
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s::one]]" file)
+		(org-store-link nil))))))
+  ;; Store file link to non-Org buffer, without context.
+  (should
+   (let ((org-stored-links nil)
+	 (org-context-in-file-links nil))
+     (org-test-with-temp-text-in-file "one\n<point>two"
+       (fundamental-mode)
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s][file:%s]]" file file)
+	 	(org-store-link nil))))))
+  ;; C-u prefix reverses `org-context-in-file-links' in non-Org
+  ;; buffer.
+  (should
+   (let ((org-stored-links nil)
+	 (org-context-in-file-links nil))
+     (org-test-with-temp-text-in-file "one\n<point>two"
+       (fundamental-mode)
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s::one]]" file)
+		(org-store-link '(4)))))))
+  ;; A C-u C-u does *not* reverse `org-context-in-file-links' in
+  ;; non-Org buffer.
+  (should
+   (let ((org-stored-links nil)
+	 (org-context-in-file-links nil))
+     (org-test-with-temp-text-in-file "one\n<point>two"
+       (fundamental-mode)
+       (let ((file (buffer-file-name)))
+	 (equal (format "[[file:%s][file:%s]]" file file)
+	 	(org-store-link '(16))))))))
 
 
 ;;; Node Properties
@@ -2572,39 +2723,6 @@ http://article.gmane.org/gmane.emacs.orgmode/21459/"
 
  
 ;;; Miscellaneous
-
-(ert-deftest test-org/in-regexp ()
-  "Test `org-in-regexp' specifications."
-  ;; Standard tests.
-  (should
-   (org-test-with-temp-text "xx ab<point>c xx"
-     (org-in-regexp "abc")))
-  (should-not
-   (org-test-with-temp-text "xx abc <point>xx"
-     (org-in-regexp "abc")))
-  ;; Return non-nil even with multiple matching regexps in the same
-  ;; line.
-  (should
-   (org-test-with-temp-text "abc xx ab<point>c xx"
-     (org-in-regexp "abc")))
-  ;; With optional argument NLINES, check extra lines around point.
-  (should-not
-   (org-test-with-temp-text "A\nB<point>\nC"
-     (org-in-regexp "A\nB\nC")))
-  (should
-   (org-test-with-temp-text "A\nB<point>\nC"
-     (org-in-regexp "A\nB\nC" 1)))
-  (should-not
-   (org-test-with-temp-text "A\nB\nC<point>"
-     (org-in-regexp "A\nB\nC" 1)))
-  ;; When optional argument VISUALLY is non-nil, return nil if at
-  ;; regexp boundaries.
-  (should
-   (org-test-with-temp-text "xx abc<point> xx"
-     (org-in-regexp "abc")))
-  (should-not
-   (org-test-with-temp-text "xx abc<point> xx"
-     (org-in-regexp "abc" nil t))))
 
 (ert-deftest test-org/sort-entries ()
   "Test `org-sort-entries'."
@@ -2800,7 +2918,81 @@ SCHEDULED: <2017-05-06 Sat>
   :END:
 "
 	    (org-sort-entries nil ?k)
+	    (buffer-string))))
+  ;; Preserve file local variables when sorting.
+  (should
+   (equal "\n* A\n* B\n# Local Variables:\n# foo: t\n# End:\n"
+	  (org-test-with-temp-text
+	      "\n* B\n* A\n# Local Variables:\n# foo: t\n# End:"
+	    (org-sort-entries nil ?a)
 	    (buffer-string)))))
+
+(ert-deftest test-org/file-contents ()
+  "Test `org-file-contents' specifications."
+  ;; Open files.
+  (should
+   (string= "#+BIND: variable value
+#+DESCRIPTION: l2
+#+LANGUAGE: en
+#+SELECT_TAGS: b
+#+TITLE: b
+#+PROPERTY: a 1
+" (org-file-contents (expand-file-name "setupfile3.org"
+				       (concat org-test-dir "examples/")))))
+  ;; Throw error when trying to access an invalid file.
+  (should-error (org-file-contents "this-file-must-not-exist"))
+  ;; Try to access an invalid file, but do not throw an error.
+  (should
+   (progn (org-file-contents "this-file-must-not-exist" :noerror) t))
+  ;; Open URL.
+  (should
+   (string= "foo"
+	    (let ((buffer (generate-new-buffer "url-retrieve-output")))
+	      (unwind-protect
+		  ;; Simulate successful retrieval of a URL.
+		  (cl-letf (((symbol-function 'url-retrieve-synchronously)
+			     (lambda (&rest_)
+			       (with-current-buffer buffer
+				 (insert "HTTP/1.1 200 OK\n\nfoo"))
+			       buffer)))
+		    (org-file-contents "http://some-valid-url"))
+		(kill-buffer buffer)))))
+  ;; Throw error when trying to access an invalid URL.
+  (should-error
+   (let ((buffer (generate-new-buffer "url-retrieve-output")))
+     (unwind-protect
+	 ;; Simulate unsuccessful retrieval of a URL.
+	 (cl-letf (((symbol-function 'url-retrieve-synchronously)
+		    (lambda (&rest_)
+		      (with-current-buffer buffer
+			(insert "HTTP/1.1 404 Not found\n\ndoes not matter"))
+		      buffer)))
+	   (org-file-contents "http://this-url-must-not-exist"))
+       (kill-buffer buffer))))
+  ;; Try to access an invalid URL, but do not throw an error.
+  (should-error
+   (let ((buffer (generate-new-buffer "url-retrieve-output")))
+     (unwind-protect
+	 ;; Simulate unsuccessful retrieval of a URL.
+	 (cl-letf (((symbol-function 'url-retrieve-synchronously)
+		    (lambda (&rest_)
+		      (with-current-buffer buffer
+			(insert "HTTP/1.1 404 Not found\n\ndoes not matter"))
+		      buffer)))
+	   (org-file-contents "http://this-url-must-not-exist"))
+       (kill-buffer buffer))))
+  (should
+   (let ((buffer (generate-new-buffer "url-retrieve-output")))
+     (unwind-protect
+	 ;; Simulate unsuccessful retrieval of a URL.
+	 (cl-letf (((symbol-function 'url-retrieve-synchronously)
+		    (lambda (&rest_)
+		      (with-current-buffer buffer
+			(insert "HTTP/1.1 404 Not found\n\ndoes not matter"))
+		      buffer)))
+	   (org-file-contents "http://this-url-must-not-exist" :noerror))
+       (kill-buffer buffer))
+     t)))
 
 
 ;;; Navigation
@@ -3009,12 +3201,12 @@ SCHEDULED: <2017-05-06 Sat>
 	    (progn (org-beginning-of-line) (looking-at-p "Item"))))))
   ;; Leave point before invisible characters at column 0.
   (should
-   (org-test-with-temp-text "[[http://orgmode.org]]<point>"
+   (org-test-with-temp-text "[[https://orgmode.org]]<point>"
      (let ((org-special-ctrl-a/e nil))
        (org-beginning-of-line)
        (bolp))))
   (should
-   (org-test-with-temp-text "[[http://orgmode.org]]<point>"
+   (org-test-with-temp-text "[[https://orgmode.org]]<point>"
      (let ((org-special-ctrl-a/e t))
        (org-beginning-of-line)
        (bolp))))
@@ -3155,7 +3347,7 @@ SCHEDULED: <2017-05-06 Sat>
        (eobp))))
   ;; Get past invisible characters at the end of line.
   (should
-   (org-test-with-temp-text "[[http://orgmode.org]]"
+   (org-test-with-temp-text "[[https://orgmode.org]]"
      (org-end-of-line)
      (eolp))))
 
@@ -3215,7 +3407,23 @@ SCHEDULED: <2017-05-06 Sat>
   (should
    (org-test-with-temp-text "Paragraph 1.<point>\n\nParagraph 2."
      (org-forward-sentence)
-     (eobp))))
+     (eobp)))
+  ;; Headlines are considered to be sentences by themselves, even if
+  ;; they do not end with a full stop.
+  (should
+   (equal
+    "* Headline"
+    (org-test-with-temp-text "* <point>Headline\nSentence."
+      (org-forward-sentence)
+      (buffer-substring-no-properties (line-beginning-position) (point)))))
+  (should
+   (org-test-with-temp-text "* Headline<point>\nSentence."
+     (org-forward-sentence)
+     (eobp)))
+  (should
+   (org-test-with-temp-text "Sentence.<point>\n\n* Headline\n\nSentence 2."
+     (org-forward-sentence)
+     (and (org-at-heading-p) (eolp)))))
 
 (ert-deftest test-org/backward-sentence ()
   "Test `org-backward-sentence' specifications."
@@ -3249,11 +3457,12 @@ SCHEDULED: <2017-05-06 Sat>
 
 (ert-deftest test-org/forward-paragraph ()
   "Test `org-forward-paragraph' specifications."
-  ;; At end of buffer, return an error.
-  (should-error
+  ;; At end of buffer, do not return an error.
+  (should
    (org-test-with-temp-text "Paragraph"
      (goto-char (point-max))
-     (org-forward-paragraph)))
+     (org-forward-paragraph)
+     t))
   ;; Standard test.
   (should
    (org-test-with-temp-text "P1\n\nP2\n\nP3"
@@ -3318,29 +3527,25 @@ SCHEDULED: <2017-05-06 Sat>
 
 (ert-deftest test-org/backward-paragraph ()
   "Test `org-backward-paragraph' specifications."
-  ;; Error at beginning of buffer.
-  (should-error
+  ;; Do not error at beginning of buffer.
+  (should
    (org-test-with-temp-text "Paragraph"
-     (org-backward-paragraph)))
+     (org-backward-paragraph)
+     t))
   ;; Regular test.
   (should
-   (org-test-with-temp-text "P1\n\nP2\n\nP3"
-     (goto-char (point-max))
+   (org-test-with-temp-text "P1\n\nP2\n\nP3<point>"
      (org-backward-paragraph)
      (looking-at "P3")))
   (should
-   (org-test-with-temp-text "P1\n\nP2\n\nP3"
-     (goto-char (point-max))
-     (beginning-of-line)
+   (org-test-with-temp-text "P1\n\nP2\n\n<point>P3"
      (org-backward-paragraph)
-     (looking-at "P2")))
+     (looking-at-p "P2")))
   ;; Ignore depth.
   (should
-   (org-test-with-temp-text "P1\n\n#+BEGIN_CENTER\nP2\n#+END_CENTER\nP3"
-     (goto-char (point-max))
-     (beginning-of-line)
+   (org-test-with-temp-text "P1\n\n#+BEGIN_CENTER\nP2\n#+END_CENTER\n<point>P3"
      (org-backward-paragraph)
-     (looking-at "P2")))
+     (looking-at-p "P2")))
   ;; Ignore invisible elements.
   (should
    (org-test-with-temp-text "* H1\n  P1\n* H2"
@@ -3351,49 +3556,61 @@ SCHEDULED: <2017-05-06 Sat>
      (bobp)))
   ;; On an affiliated keyword, jump to the first one.
   (should
-   (org-test-with-temp-text "P1\n#+name: n\n#+caption: c1\n#+caption: c2\nP2"
-     (search-forward "c2")
+   (org-test-with-temp-text
+       "P1\n#+name: n\n#+caption: c1\n#+caption: <point>c2\nP2"
      (org-backward-paragraph)
-     (looking-at "#\\+name")))
+     (looking-at-p "#\\+name")))
   ;; On the second element in an item or a footnote definition, jump
   ;; to item or the definition.
   (should
-   (org-test-with-temp-text "- line1\n\n  line2"
-     (goto-char (point-max))
-     (beginning-of-line)
+   (org-test-with-temp-text "- line1\n\n<point>  line2"
      (org-backward-paragraph)
-     (looking-at "- line1")))
+     (looking-at-p "- line1")))
   (should
-   (org-test-with-temp-text "[fn:1] line1\n\n  line2"
-     (goto-char (point-max))
-     (beginning-of-line)
+   (org-test-with-temp-text "[fn:1] line1\n\n<point>  line2"
      (org-backward-paragraph)
-     (looking-at "\\[fn:1\\] line1")))
+     (looking-at-p "\\[fn:1\\] line1")))
   ;; On a table (resp. a property drawer), ignore table rows
   ;; (resp. node properties).
   (should
-   (org-test-with-temp-text "| a | b |\n| c | d |\nP1"
-     (goto-char (point-max))
-     (beginning-of-line)
+   (org-test-with-temp-text "| a | b |\n| c | d |\n<point>P1"
      (org-backward-paragraph)
      (bobp)))
   (should
    (org-test-with-temp-text "* H\n:PROPERTIES:\n:prop: value\n:END:\n<point>P1"
      (org-backward-paragraph)
-     (looking-at ":PROPERTIES:")))
-  ;; On a source or verse block, stop before blank lines.
+     (looking-at-p ":PROPERTIES:")))
+  ;; On a comment, example, src and verse blocks, stop before blank
+  ;; lines.
   (should
-   (org-test-with-temp-text "#+BEGIN_VERSE\nL1\n\nL2\n\nL3\n#+END_VERSE"
-     (search-forward "L3")
-     (beginning-of-line)
+   (org-test-with-temp-text "#+BEGIN_VERSE\nL1\n\nL2\n\n<point>L3\n#+END_VERSE"
      (org-backward-paragraph)
-     (looking-at "L2")))
+     (looking-at-p "L2")))
   (should
-   (org-test-with-temp-text "#+BEGIN_SRC\nL1\n\nL2\n\nL3#+END_SRC"
-     (search-forward "L3")
-     (beginning-of-line)
+   (org-test-with-temp-text "#+BEGIN_SRC\nL1\n\nL2\n\n<point>L3#+END_SRC"
      (org-backward-paragraph)
-     (looking-at "L2"))))
+     (looking-at-p "L2")))
+  ;; In comment, example, export, src and verse blocks, stop below
+  ;; opening line when called from within the block.
+  (should
+   (org-test-with-temp-text "#+BEGIN_VERSE\nL1\nL2<point>\n#+END_VERSE"
+     (org-backward-paragraph)
+     (looking-at-p "L1")))
+  (should
+   (org-test-with-temp-text "#+BEGIN_EXAMPLE\nL1\nL2<point>\n#+END_EXAMPLE"
+     (org-backward-paragraph)
+     (looking-at-p "L1")))
+  ;; When called from the opening line itself, however, move to
+  ;; beginning of block.
+  (should
+   (org-test-with-temp-text "#+BEGIN_<point>EXAMPLE\nL1\n#+END_EXAMPLE"
+     (org-backward-paragraph)
+     (bobp)))
+  ;; Pathological case: on an empty heading, move to its beginning.
+  (should
+   (org-test-with-temp-text "* <point>H"
+     (org-backward-paragraph)
+     (bobp))))
 
 (ert-deftest test-org/forward-element ()
   "Test `org-forward-element' specifications."
@@ -3802,6 +4019,51 @@ Text.
      (let ((case-fold-search nil))
        (org-next-block 1 nil "^[ \t]*#\\+BEGIN_QUOTE")
        (looking-at "#\\+begin_quote")))))
+
+(ert-deftest test-org/insert-template ()
+  "Test `org-insert-structure-template'."
+  ;; Test in empty buffer.
+  (should
+   (string= "#+begin_foo\n#+end_foo\n"
+	    (org-test-with-temp-text ""
+	      (org-insert-structure-template "foo")
+	      (buffer-string))))
+  ;; Test with multiple lines in buffer.
+  (should
+   (string= "#+begin_foo\nI'm a paragraph\n#+end_foo\n\nI'm a second paragraph"
+	    (org-test-with-temp-text "I'm a paragraph\n\nI'm a second paragraph"
+	      (org-mark-element)
+	      (org-insert-structure-template "foo")
+	      (buffer-string))))
+  ;; Test with text in buffer, no region, no final newline.
+  (should
+   (string= "#+begin_foo\nI'm a paragraph.\n#+end_foo\n"
+	    (org-test-with-temp-text "I'm a paragraph."
+	      (org-mark-element)
+	      (org-insert-structure-template "foo")
+	      (buffer-string))))
+  ;; Test with text in buffer and region set.
+  (should
+   (string= "#+begin_foo\nI'm a paragraph\n\nI'm a second paragrah\n#+end_foo\n"
+	    (org-test-with-temp-text "I'm a paragraph\n\nI'm a second paragrah"
+	      (set-mark (point))
+	      (goto-char (point-max))
+	      (org-insert-structure-template "foo")
+	      (buffer-string))))
+  ;; Test with example escaping.
+  (should
+   (string= "#+begin_example\n,* Heading\n#+end_example\n"
+	    (org-test-with-temp-text "* Heading"
+	      (org-mark-element)
+	      (org-insert-structure-template "example")
+	      (buffer-string))))
+  ;; Test with indentation.
+  (should
+   (string= "  #+begin_foo\n  This is a paragraph\n  #+end_foo\n"
+	    (org-test-with-temp-text "  This is a paragraph"
+	      (org-mark-element)
+	      (org-insert-structure-template "foo")
+	      (buffer-string)))))
 
 (ert-deftest test-org/previous-block ()
   "Test `org-previous-block' specifications."
@@ -4705,12 +4967,19 @@ Paragraph<point>"
 	  (org-test-with-temp-text
 	      "* H\n:PROPERTIES:\n:COLUMNS: %25ITEM %A %20B\n:END:"
 	    (org-buffer-property-keys nil nil t))))
-  ;; With non-nil IGNORE-MALFORMED malformed property drawers are silently ignored.
+  ;; In COLUMNS, ignore title and summary-type.
   (should
    (equal '("A")
-	  (org-test-with-temp-text
-	      "* a\n:PROPERTIES:\n:A: 1\n:END:\n* b\n:PROPERTIES:\nsome junk here\n:END:\n"
-	    (org-buffer-property-keys nil nil nil t)))))
+	  (org-test-with-temp-text "#+COLUMNS: %A(Foo)"
+	    (org-buffer-property-keys nil nil t))))
+  (should
+   (equal '("A")
+	  (org-test-with-temp-text "#+COLUMNS: %A{Foo}"
+	    (org-buffer-property-keys nil nil t))))
+  (should
+   (equal '("A")
+	  (org-test-with-temp-text "#+COLUMNS: %A(Foo){Bar}"
+	    (org-buffer-property-keys nil nil t)))))
 
 (ert-deftest test-org/property-values ()
   "Test `org-property-values' specifications."
@@ -5266,6 +5535,118 @@ Paragraph<point>"
 	 (org-element-type (org-element-context))))))
 
 
+;;; Refile
+
+(ert-deftest test-org/refile-get-targets ()
+  "Test `org-refile-get-targets' specifications."
+  ;; :maxlevel includes all headings above specified value.
+  (should
+   (equal '("H1" "H2" "H3")
+	  (org-test-with-temp-text "* H1\n** H2\n*** H3"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :maxlevel . 3))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  (should
+   (equal '("H1" "H2")
+	  (org-test-with-temp-text "* H1\n** H2\n*** H3"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :maxlevel . 2))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; :level limits targets to headlines with the specified level.
+  (should
+   (equal '("H2")
+	  (org-test-with-temp-text "* H1\n** H2\n*** H3"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :level . 2))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; :tag limits targets to headlines with specified tag.
+  (should
+   (equal '("H1")
+	  (org-test-with-temp-text "* H1 :foo:\n** H2\n*** H3 :bar:"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :tag . "foo"))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; :todo limits targets to headlines with specified TODO keyword.
+  (should
+   (equal '("H2")
+	  (org-test-with-temp-text "* H1\n** TODO H2\n*** DONE H3"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :todo . "TODO"))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; :regexp filters targets matching provided regexp.
+  (should
+   (equal '("F2" "F3")
+	  (org-test-with-temp-text "* H1\n** F2\n*** F3"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :regexp . "F"))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; A nil `org-refile-targets' includes only top level headlines in
+  ;; current buffer.
+  (should
+   (equal '("H1" "H2")
+	  (org-test-with-temp-text "* H1\n** S1\n* H2"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets nil))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; Return value is the union of the targets according to all the
+  ;; defined rules.  However, prevent duplicates.
+  (should
+   (equal '("F2" "F3" "H1")
+	  (org-test-with-temp-text "* TODO H1\n** F2\n*** F3"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :regexp . "F")
+					(nil :todo . "TODO"))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  (should
+   (equal '("F2" "F3" "H1")
+	  (org-test-with-temp-text "* TODO H1\n** TODO F2\n*** F3"
+	    (let ((org-refile-use-outline-path nil)
+		  (org-refile-targets `((nil :regexp . "F")
+					(nil :todo . "TODO"))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; When `org-refile-use-outline-path' is non-nil, provide targets as
+  ;; paths.
+  (should
+   (equal '("H1" "H1/H2" "H1/H2/H3")
+	  (org-test-with-temp-text "* H1\n** H2\n*** H3"
+	    (let ((org-refile-use-outline-path t)
+		  (org-refile-targets `((nil :maxlevel . 3))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; When providing targets as paths, escape forward slashes in
+  ;; headings with backslashes.
+  (should
+   (equal '("H1\\/foo")
+	  (org-test-with-temp-text "* H1/foo"
+	    (let ((org-refile-use-outline-path t)
+		  (org-refile-targets `((nil :maxlevel . 1))))
+	      (mapcar #'car (org-refile-get-targets))))))
+  ;; When `org-refile-use-outline-path' is `file', include file name
+  ;; without directory in targets.
+  (should
+   (org-test-with-temp-text-in-file "* H1"
+     (let* ((filename (buffer-file-name))
+	    (org-refile-use-outline-path 'file)
+	    (org-refile-targets `(((,filename) :level . 1))))
+       (member (file-name-nondirectory filename)
+	       (mapcar #'car (org-refile-get-targets))))))
+  ;; When `org-refile-use-outline-path' is `full-file-path', include
+  ;; full file name.
+  (should
+   (org-test-with-temp-text-in-file "* H1"
+     (let* ((filename (file-truename (buffer-file-name)))
+	    (org-refile-use-outline-path 'full-file-path)
+	    (org-refile-targets `(((,filename) :level . 1))))
+       (member filename (mapcar #'car (org-refile-get-targets))))))
+  ;; When `org-refile-use-outline-path' is `buffer-name', include
+  ;; buffer name.
+  (should
+   (org-test-with-temp-text "* H1"
+     (let* ((org-refile-use-outline-path 'buffer-name)
+	    (org-refile-targets `((nil :level . 1))))
+       (member (buffer-name) (mapcar #'car (org-refile-get-targets)))))))
+
+
+
 ;;; Sparse trees
 
 (ert-deftest test-org/match-sparse-tree ()
@@ -5723,7 +6104,7 @@ Paragraph<point>"
       (cl-letf (((symbol-function 'org-add-log-setup)
 		 (lambda (&rest args) nil)))
 	(org-test-with-temp-text
-	    "* TODO H\n<2012-03-29 Thu. +2y>\nCLOCK: [2012-03-29 Thu 16:40]"
+	    "* TODO H\n<2012-03-29 Thu +2y>\nCLOCK: [2012-03-29 Thu 16:40]"
 	  (org-todo "DONE")
 	  (buffer-string))))))
   ;; When a SCHEDULED entry has no repeater, remove it upon repeating
@@ -5734,6 +6115,19 @@ Paragraph<point>"
     (let ((org-todo-keywords '((sequence "TODO" "DONE"))))
       (org-test-with-temp-text
 	  "* TODO H\nSCHEDULED: <2014-03-04 Tue>\n<2012-03-29 Thu +2y>"
+	(org-todo "DONE")
+	(buffer-string)))))
+  ;; Properly advance repeater even when a clock entry is specified
+  ;; and `org-log-repeat' is nil.
+  (should
+   (string-match-p
+    "SCHEDULED: <2014-03-29"
+    (let ((org-log-repeat nil)
+	  (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+	  "* TODO H
+SCHEDULED: <2012-03-29 Thu +2y>
+CLOCK: [2012-03-29 Thu 10:00]--[2012-03-29 Thu 16:40] =>  6:40"
 	(org-todo "DONE")
 	(buffer-string))))))
 
@@ -6075,6 +6469,110 @@ Paragraph<point>"
 		  (org-time-stamp-custom-formats '("<%d>" . "<%d>")))
 	      (org-timestamp-translate (org-element-context)))))))
 
+(ert-deftest test-org/timestamp-from-string ()
+  "Test `org-timestamp-from-string' specifications."
+  ;; Return nil if argument is not a valid Org timestamp.
+  (should-not (org-timestamp-from-string ""))
+  (should-not (org-timestamp-from-string nil))
+  (should-not (org-timestamp-from-string "<2012-03-29"))
+  ;; Otherwise, return a valid Org timestamp object.
+  (should
+   (equal "<2012-03-29 Thu>"
+	  (let ((system-time-locale "en_US"))
+	       (org-element-interpret-data
+		(org-timestamp-from-string "<2012-03-29 Thu>")))))
+  (should
+   (equal "[2014-03-04 Tue]"
+	  (let ((system-time-locale "en_US"))
+	       (org-element-interpret-data
+		(org-timestamp-from-string "[2014-03-04 Tue]"))))))
+
+(ert-deftest test-org/timestamp-from-time ()
+  "Test `org-timestamp-from-time' specifications."
+  ;; Standard test.
+  (should
+   (equal "<2012-03-29 Thu>"
+	  (let ((system-time-locale "en_US"))
+	    (org-element-interpret-data
+	     (org-timestamp-from-time
+	      (apply #'encode-time
+		     (org-parse-time-string "<2012-03-29 Thu 16:40>")))))))
+  ;; When optional argument WITH-TIME is non-nil, provide time
+  ;; information.
+  (should
+   (equal "<2012-03-29 Thu 16:40>"
+	  (let ((system-time-locale "en_US"))
+	    (org-element-interpret-data
+	     (org-timestamp-from-time
+	      (apply #'encode-time
+		     (org-parse-time-string "<2012-03-29 Thu 16:40>"))
+	      t)))))
+  ;; When optional argument INACTIVE is non-nil, return an inactive
+  ;; timestamp.
+  (should
+   (equal "[2012-03-29 Thu]"
+	  (let ((system-time-locale "en_US"))
+	    (org-element-interpret-data
+	     (org-timestamp-from-time
+	      (apply #'encode-time
+		     (org-parse-time-string "<2012-03-29 Thu 16:40>"))
+	      nil t))))))
+
+(ert-deftest test-org/timestamp-to-time ()
+  "Test `org-timestamp-to-time' specifications."
+  (should
+   (equal "2014-03-04"
+	  (format-time-string
+	   "%Y-%m-%d"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "<2014-03-04 Tue>")))))
+  (should
+   (equal "2014-03-04"
+	  (format-time-string
+	   "%Y-%m-%d"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "[2014-03-04 Tue]")))))
+  (should
+   (equal "2012-03-29 08:30"
+	  (format-time-string
+	   "%Y-%m-%d %H:%M"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "<2012-03-29 Thu 08:30-16:40>")))))
+  (should
+   (equal "2012-03-29"
+	  (format-time-string
+	   "%Y-%m-%d"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "<2012-03-29 Thu>--<2014-03-04 Tue>")))))
+  (should
+   (equal "2012-03-29"
+	  (format-time-string
+	   "%Y-%m-%d"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "[2012-03-29 Thu]--[2014-03-04 Tue]")))))
+  ;; When optional argument END is non-nil, use end of date range or
+  ;; time range.
+  (should
+   (equal "2012-03-29 16:40"
+	  (format-time-string
+	   "%Y-%m-%d %H:%M"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "<2012-03-29 Thu 08:30-16:40>")
+	    t))))
+  (should
+   (equal "2014-03-04"
+	  (format-time-string
+	   "%Y-%m-%d"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "<2012-03-29 Thu>--<2014-03-04 Tue>")
+	    t))))
+  (should
+   (equal "2014-03-04"
+	  (format-time-string
+	   "%Y-%m-%d"
+	   (org-timestamp-to-time
+	    (org-timestamp-from-string "[2012-03-29 Thu]--[2014-03-04 Tue]")
+	    t)))))
 
 
 ;;; Visibility
@@ -6281,6 +6779,142 @@ Paragraph<point>"
      (search-forward "Text")
      (org-show-set-visibility 'minimal)
      (org-invisible-p2))))
+
+(defun test-org/copy-visible ()
+  "Test `org-copy-visible' specifications."
+  (should
+   (equal "Foo"
+	  (org-test-with-temp-text "Foo"
+	    (let ((kill-ring nil))
+	      (org-copy-visible (point-min) (point-max))
+	      (current-kill 0 t)))))
+  ;; Skip invisible characters by text property.
+  (should
+   (equal "Foo"
+	  (org-test-with-temp-text #("F<hidden>oo" 1 7 (invisible t))
+	    (let ((kill-ring nil))
+	      (org-copy-visible (point-min) (point-max))
+	      (current-kill 0 t)))))
+  ;; Skip invisible characters by overlay.
+  (should
+   (equal "Foo"
+	  (org-test-with-temp-text "F<hidden>oo"
+	    (let ((o (make-overlay 2 10)))
+	      (overlay-put o 'invisible t))
+	    (let ((kill-ring nil))
+	      (org-copy-visible (point-min) (point-max))
+	      (current-kill 0 t)))))
+  ;; Handle invisible characters at the beginning and the end of the
+  ;; buffer.
+  (should
+   (equal "Foo"
+	  (org-test-with-temp-text #("<hidden>Foo" 0 8 (invisible t))
+	    (let ((kill-ring nil))
+	      (org-copy-visible (point-min) (point-max))
+	      (current-kill 0 t)))))
+  (should
+   (equal "Foo"
+	  (org-test-with-temp-text #("Foo<hidden>" 3 11 (invisible t))
+	    (let ((kill-ring nil))
+	      (org-copy-visible (point-min) (point-max))
+	      (current-kill 0 t)))))
+  ;; Handle multiple visible parts.
+  (should
+   (equal "abc"
+	  (org-test-with-temp-text
+	      #("aXbXc" 1 2 (invisible t) 3 4 (invisible t))
+	    (let ((kill-ring nil))
+	      (org-copy-visible (point-min) (point-max))
+	      (current-kill 0 t))))))
+
+(ert-deftest test-org/set-visibility-according-to-property ()
+  "Test `org-set-visibility-according-to-property' specifications."
+  ;; "folded" state.
+  (should
+   (org-test-with-temp-text
+       "
+* a
+:PROPERTIES:
+:VISIBILITY: folded
+:END:
+** <point>b"
+     (org-set-visibility-according-to-property)
+     (invisible-p (point))))
+  ;; "children" state.
+  (should
+   (org-test-with-temp-text
+       "
+* a
+:PROPERTIES:
+:VISIBILITY: children
+:END:
+** b
+<point>Contents
+** c"
+     (org-set-visibility-according-to-property)
+     (invisible-p (point))))
+  (should
+   (org-test-with-temp-text
+       "
+* a
+:PROPERTIES:
+:VISIBILITY: children
+:END:
+** b
+Contents
+*** <point>c"
+     (org-set-visibility-according-to-property)
+     (invisible-p (point))))
+  ;; "content" state.
+  (should
+   (org-test-with-temp-text
+       "
+* a
+:PROPERTIES:
+:VISIBILITY: content
+:END:
+** b
+<point>Contents
+*** c"
+     (org-set-visibility-according-to-property)
+     (invisible-p (point))))
+  (should
+   (org-test-with-temp-text
+       "
+* a
+:PROPERTIES:
+:VISIBILITY: content
+:END:
+** b
+Contents
+*** <point>c"
+     (org-set-visibility-according-to-property)
+     (not (invisible-p (point)))))
+  ;; "showall" state.
+  (should
+   (org-test-with-temp-text
+       "
+* a
+:PROPERTIES:
+:VISIBILITY: showall
+:END:
+** b
+<point>Contents
+*** c"
+     (org-set-visibility-according-to-property)
+     (not (invisible-p (point)))))
+  (should
+   (org-test-with-temp-text
+       "
+* a
+:PROPERTIES:
+:VISIBILITY: showall
+:END:
+** b
+Contents
+*** <point>c"
+     (org-set-visibility-according-to-property)
+     (not (invisible-p (point))))))
 
 
 (provide 'test-org)

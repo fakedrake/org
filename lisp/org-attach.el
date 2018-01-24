@@ -1,6 +1,6 @@
 ;;; org-attach.el --- Manage file attachments to Org tasks -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2018 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@newartisans.com>
 ;; Keywords: org data task
@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -54,7 +54,8 @@
 If this is a relative path, it will be interpreted relative to the directory
 where the Org file lives."
   :group 'org-attach
-  :type 'directory)
+  :type 'directory
+  :safe #'stringp)
 
 (defcustom org-attach-commit t
   "If non-nil commit attachments with git.
@@ -144,7 +145,7 @@ When set to `query', ask the user instead."
   "Confirmation preference for automatically getting annex files.
 If \\='ask, prompt using `y-or-n-p'.  If t, always get.  If nil, never get."
   :group 'org-attach
-  :package-version '(Org . "9")
+  :package-version '(Org . "9.0")
   :version "26.1"
   :type '(choice
 	  (const :tag "confirm with `y-or-n-p'" ask)
@@ -189,7 +190,7 @@ d       Delete one attachment, you will be prompted for a file name.
 D       Delete all of a task's attachments.  A safer way is
         to open the directory in dired and delete from there.
 
-s       Set a specific attachment directory for this entry.
+s       Set a specific attachment directory for this entry or reset to default.
 i       Make children of the current entry inherit its attachment directory.")))
 	  (org-fit-window-to-buffer (get-buffer-window "*Org Attach*"))
 	  (message "Select command: [acmlzoOfFdD]")
@@ -275,14 +276,30 @@ Throw an error if we cannot root the directory."
       (buffer-file-name (buffer-base-buffer))
       (error "Need absolute `org-attach-directory' to attach in buffers without filename")))
 
-(defun org-attach-set-directory ()
-  "Set the ATTACH_DIR property of the current entry.
+(defun org-attach-set-directory (&optional arg)
+  "Set the ATTACH_DIR node property and ask to move files there.
 The property defines the directory that is used for attachments
-of the entry."
-  (interactive)
-  (let ((dir (org-entry-get nil "ATTACH_DIR")))
-    (setq dir (read-directory-name "Attachment directory: " dir))
-    (org-entry-put nil "ATTACH_DIR" dir)))
+of the entry.  When called with `\\[universal-argument]', reset \
+the directory to
+the default ID based one."
+  (interactive "P")
+  (let ((old (org-attach-dir))
+        (new
+         (progn
+           (if arg (org-entry-delete nil "ATTACH_DIR")
+             (let ((dir (read-directory-name
+                         "Attachment directory: "
+                         (org-entry-get nil
+                                        "ATTACH_DIR"
+                                        (and org-attach-allow-inheritance t)))))
+               (org-entry-put nil "ATTACH_DIR" dir)))
+           (org-attach-dir t))))
+    (unless (or (string= old new)
+                (not old))
+      (when (yes-or-no-p "Copy over attachments from old directory? ")
+        (copy-directory old new t nil t))
+      (when (yes-or-no-p (concat "Delete " old))
+        (delete-directory old t)))))
 
 (defun org-attach-set-inherit ()
   "Set the ATTACH_DIR_INHERIT property of the current entry.
@@ -459,7 +476,8 @@ The attachment is created as an Emacs buffer."
     (unless (file-exists-p file)
       (error "No such attachment: %s" file))
     (delete-file file)
-    (org-attach-commit)))
+    (when org-attach-commit
+      (org-attach-commit))))
 
 (defun org-attach-delete-all (&optional force)
   "Delete all attachments from the current task.
@@ -475,20 +493,22 @@ A safer way is to open the directory in dired and delete from there."
 		 (y-or-n-p "Are you sure you want to remove all attachments of this entry? ")))
       (shell-command (format "rm -fr %s" attach-dir))
       (message "Attachment directory removed")
-      (org-attach-commit)
+      (when org-attach-commit
+        (org-attach-commit))
       (org-attach-untag))))
 
 (defun org-attach-sync ()
   "Synchronize the current tasks with its attachments.
 This can be used after files have been added externally."
   (interactive)
-  (org-attach-commit)
+  (when org-attach-commit
+    (org-attach-commit))
   (when (and org-attach-file-list-property (not org-attach-inherited))
     (org-entry-delete (point) org-attach-file-list-property))
   (let ((attach-dir (org-attach-dir)))
     (when attach-dir
       (let ((files (org-attach-file-list attach-dir)))
-	(and files (org-attach-tag))
+	(org-attach-tag (not files))
 	(when org-attach-file-list-property
 	  (dolist (file files)
 	    (unless (string-match "^\\.\\.?\\'" file)
@@ -557,6 +577,42 @@ This function is called by `org-archive-hook'.  The option
 	    (yes-or-no-p "Delete all attachments? ")
 	  org-attach-archive-delete)
     (org-attach-delete-all t)))
+
+
+;; Attach from dired.
+
+;; Add the following lines to the config file to get a binding for
+;; dired-mode.
+
+;; (add-hook
+;;  'dired-mode-hook
+;;  (lambda ()
+;;    (define-key dired-mode-map (kbd "C-c C-x a") #'org-attach-dired-to-subtree))))
+
+(defun org-attach-dired-to-subtree (files)
+  "Attach FILES marked or current file in dired to subtree in other window.
+Takes the method given in `org-attach-method' for the attach action.
+Precondition: Point must be in a dired buffer.
+Idea taken from `gnus-dired-attach'."
+  (interactive
+   (list (dired-get-marked-files)))
+  (unless (eq major-mode 'dired-mode)
+    (user-error "This command must be triggered in a dired buffer."))
+  (let ((start-win (selected-window))
+        (other-win
+         (get-window-with-predicate
+          (lambda (window)
+            (with-current-buffer (window-buffer window)
+              (eq major-mode 'org-mode))))))
+    (unless other-win
+      (user-error
+       "Can't attach to subtree.  No window displaying an Org buffer"))
+    (select-window other-win)
+    (dolist (file files)
+      (org-attach-attach file))
+    (select-window start-win)))
+
+
 
 (add-hook 'org-archive-hook 'org-attach-archive-delete-maybe)
 

@@ -1,12 +1,12 @@
 ;;; org-src.el --- Source code examples in Org       -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2018 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;	   Bastien Guerry <bzg@gnu.org>
 ;;         Dan Davison <davison at stats dot ox dot ac dot uk>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -21,7 +21,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;; Commentary:
@@ -128,7 +128,8 @@ editing it with `\\[org-edit-src-code]'.
 
 It has no effect if `org-src-preserve-indentation' is non-nil."
   :group 'org-edit-structure
-  :type 'integer)
+  :type 'integer
+  :safe #'wholenump)
 
 (defcustom org-edit-src-persistent-message t
   "Non-nil means show persistent exit help message while editing src examples.
@@ -424,11 +425,10 @@ Assume point is in the corresponding edit buffer."
       (buffer-string))))
 
 (defun org-src--edit-element
-    (datum name &optional major write-back contents remote)
+    (datum name &optional initialize write-back contents remote)
   "Edit DATUM contents in a dedicated buffer NAME.
 
-MAJOR is the major mode used in the edit buffer.  A nil value is
-equivalent to `fundamental-mode'.
+INITIALIZE is a function to call upon creating the buffer.
 
 When WRITE-BACK is non-nil, assume contents will replace original
 region.  Moreover, if it is a function, apply it in the edit
@@ -489,12 +489,13 @@ Leave point in edit buffer."
 	(unless preserve-ind (org-do-remove-indentation))
 	(set-buffer-modified-p nil)
 	(setq buffer-file-name nil)
-	;; Start major mode.
-	(if (not major) (fundamental-mode)
+	;; Initialize buffer.
+	(when (functionp initialize)
 	  (let ((org-inhibit-startup t))
-	    (condition-case e (funcall major)
-	      (error (message "Language mode `%s' fails with: %S"
-			      major (nth 1 e))))))
+	    (condition-case e
+		(funcall initialize)
+	      (error (message "Initialization fails with: %S"
+			      (error-message-string e))))))
 	;; Transmit buffer-local variables for exit function.  It must
 	;; be done after initializing major mode, as this operation
 	;; may reset them otherwise.
@@ -581,14 +582,15 @@ Escaping happens when a line starts with \"*\", \"#+\", \",*\" or
   (interactive "r")
   (save-excursion
     (goto-char end)
-    (while (re-search-backward "^[ \t]*,?\\(\\*\\|#\\+\\)" beg t)
+    (while (re-search-backward "^[ \t]*\\(,*\\(?:\\*\\|#\\+\\)\\)" beg t)
       (save-excursion (replace-match ",\\1" nil nil nil 1)))))
 
 (defun org-escape-code-in-string (s)
   "Escape lines in string S.
 Escaping happens when a line starts with \"*\", \"#+\", \",*\" or
 \",#+\" by appending a comma to it."
-  (replace-regexp-in-string "^[ \t]*,?\\(\\*\\|#\\+\\)" ",\\1" s nil nil 1))
+  (replace-regexp-in-string "^[ \t]*\\(,*\\(?:\\*\\|#\\+\\)\\)" ",\\1"
+			    s nil nil 1))
 
 (defun org-unescape-code-in-region (beg end)
   "Un-escape lines between BEG and END.
@@ -597,7 +599,7 @@ with \",*\", \",#+\", \",,*\" and \",,#+\"."
   (interactive "r")
   (save-excursion
     (goto-char end)
-    (while (re-search-backward "^[ \t]*,?\\(,\\)\\(?:\\*\\|#\\+\\)" beg t)
+    (while (re-search-backward "^[ \t]*,*\\(,\\)\\(?:\\*\\|#\\+\\)" beg t)
       (save-excursion (replace-match "" nil nil nil 1)))))
 
 (defun org-unescape-code-in-string (s)
@@ -605,7 +607,7 @@ with \",*\", \",#+\", \",,*\" and \",,#+\"."
 Un-escaping happens by removing the first comma on lines starting
 with \",*\", \",#+\", \",,*\" and \",,#+\"."
   (replace-regexp-in-string
-   "^[ \t]*,?\\(,\\)\\(?:\\*\\|#\\+\\)" "" s nil nil 1))
+   "^[ \t]*,*\\(,\\)\\(?:\\*\\|#\\+\\)" "" s nil nil 1))
 
 
 
@@ -810,45 +812,49 @@ A coderef format regexp can only match at the end of a line."
 			(org-footnote-goto-definition label)
 			(backward-char)
 			(org-element-context)))
-	   (inline (eq (org-element-type definition) 'footnote-reference))
+	   (inline? (eq 'footnote-reference (org-element-type definition)))
 	   (contents
-	    (let ((c (org-with-wide-buffer
-		      (org-trim (buffer-substring-no-properties
-				 (org-element-property :begin definition)
-				 (org-element-property :end definition))))))
-	      (add-text-properties
-	       0
-	       (progn (string-match (if inline "\\`\\[fn:.*?:" "\\`.*?\\]") c)
-		      (match-end 0))
-	       '(read-only "Cannot edit footnote label" front-sticky t
-			   rear-nonsticky t)
-	       c)
-	      (when inline
-		(let ((l (length c)))
-		  (add-text-properties
-		   (1- l) l
-		   '(read-only "Cannot edit past footnote reference"
-			       front-sticky nil rear-nonsticky nil)
-		   c)))
-	      c)))
+	    (org-with-wide-buffer
+	     (buffer-substring-no-properties
+	      (or (org-element-property :post-affiliated definition)
+		  (org-element-property :begin definition))
+	      (cond
+	       (inline? (1+ (org-element-property :contents-end definition)))
+	       ((org-element-property :contents-end definition))
+	       (t (goto-char (org-element-property :post-affiliated definition))
+		  (line-end-position)))))))
+      (add-text-properties
+       0
+       (progn (string-match (if inline? "\\`\\[fn:.*?:" "\\`.*?\\]") contents)
+	      (match-end 0))
+       '(read-only "Cannot edit footnote label" front-sticky t rear-nonsticky t)
+       contents)
+      (when inline?
+	(let ((l (length contents)))
+	  (add-text-properties
+	   (1- l) l
+	   '(read-only "Cannot edit past footnote reference"
+		       front-sticky nil rear-nonsticky nil)
+	   contents)))
       (org-src--edit-element
        definition
        (format "*Edit footnote [%s]*" label)
-       #'org-mode
-       `(lambda ()
-	  (if ,(not inline) (delete-region (point) (search-forward "]"))
-	    (delete-region (point) (search-forward ":" nil t 2))
-	    (delete-region (1- (point-max)) (point-max))
-	    (when (re-search-forward "\n[ \t]*\n" nil t)
-	      (user-error "Inline definitions cannot contain blank lines"))
-	    ;; If footnote reference belongs to a table, make sure to
-	    ;; remove any newline characters in order to preserve
-	    ;; table's structure.
-	    (when ,(org-element-lineage definition '(table-cell))
-	      (while (search-forward "\n" nil t) (delete-char -1)))))
-       (concat contents
-	       (and (not (org-element-property :contents-begin definition))
-		    " "))
+       (let ((source (current-buffer)))
+	 (lambda ()
+	   (org-mode)
+	   (org-clone-local-variables source)))
+       (lambda ()
+	 (if (not inline?) (delete-region (point) (search-forward "]"))
+	   (delete-region (point) (search-forward ":" nil t 2))
+	   (delete-region (1- (point-max)) (point-max))
+	   (when (re-search-forward "\n[ \t]*\n" nil t)
+	     (user-error "Inline definitions cannot contain blank lines"))
+	   ;; If footnote reference belongs to a table, make sure to
+	   ;; remove any newline characters in order to preserve
+	   ;; table's structure.
+	   (when (org-element-lineage definition '(table-cell))
+	     (while (search-forward "\n" nil t) (replace-match "")))))
+       contents
        'remote))
     ;; Report success.
     t))
@@ -916,7 +922,10 @@ Throw an error when not at an export block."
     (unless (and (eq (org-element-type element) 'export-block)
 		 (org-src--on-datum-p element))
       (user-error "Not in an export block"))
-    (let* ((type (downcase (org-element-property :type element)))
+    (let* ((type (downcase (or (org-element-property :type element)
+			       ;; Missing export-block type.  Fallback
+			       ;; to default mode.
+			       "fundamental")))
 	   (mode (org-src--get-lang-mode type)))
       (unless (functionp mode) (error "No such language mode: %s" mode))
       (org-src--edit-element
@@ -1087,8 +1096,10 @@ Throw an error if there is no such buffer."
 	 (code (and write-back (org-src--contents-for-write-back))))
     (set-buffer-modified-p nil)
     ;; Switch to source buffer.  Kill sub-editing buffer.
-    (let ((edit-buffer (current-buffer)))
-      (org-src-switch-to-buffer (marker-buffer beg) 'exit)
+    (let ((edit-buffer (current-buffer))
+	  (source-buffer (marker-buffer beg)))
+      (unless source-buffer (error "Source buffer disappeared.  Aborting"))
+      (org-src-switch-to-buffer source-buffer 'exit)
       (kill-buffer edit-buffer))
     ;; Insert modified code.  Ensure it ends with a newline character.
     (org-with-wide-buffer
@@ -1107,7 +1118,7 @@ Throw an error if there is no such buffer."
       (cond
        ;; Block is hidden; move at start of block.
        ((cl-some (lambda (o) (eq (overlay-get o 'invisible) 'org-hide-block))
-		  (overlays-at (point)))
+		 (overlays-at (point)))
 	(beginning-of-line 0))
        (write-back (org-src--goto-coordinates coordinates beg end))))
     ;; Clean up left-over markers and restore window configuration.

@@ -1,11 +1,11 @@
 ;;; ob-lob.el --- Functions Supporting the Library of Babel -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2018 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	 Dan Davison
 ;; Keywords: literate programming, reproducible research
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 (require 'cl-lib)
@@ -53,11 +53,15 @@ should not be inherited from a source block.")
       (let* ((info (org-babel-get-src-block-info 'light))
 	     (source-name (nth 4 info)))
 	(when source-name
-	  (setq source-name (intern source-name)
-		org-babel-library-of-babel
-		(cons (cons source-name info)
-		      (assq-delete-all source-name org-babel-library-of-babel))
-		lob-ingest-count (1+ lob-ingest-count)))))
+	  (setf (nth 1 info)
+		(if (org-babel-noweb-p (nth 2 info) :eval)
+		    (org-babel-expand-noweb-references info)
+		  (nth 1 info)))
+	  (let ((source (intern source-name)))
+	    (setq org-babel-library-of-babel
+		  (cons (cons source info)
+			(assq-delete-all source org-babel-library-of-babel))))
+	  (cl-incf lob-ingest-count))))
     (message "%d src block%s added to Library of Babel"
 	     lob-ingest-count (if (> lob-ingest-count 1) "s" ""))
     lob-ingest-count))
@@ -124,9 +128,8 @@ compatible with `org-babel-get-src-block-info', which see."
 			header
 			org-babel-default-lob-header-args
 			(append
-			 (org-with-wide-buffer
-			  (goto-char begin)
-			  (org-babel-params-from-properties language))
+			 (org-with-point-at begin
+			   (org-babel-params-from-properties language))
 			 (list
 			  (org-babel-parse-header-arguments
 			   (org-element-property :inside-header context))

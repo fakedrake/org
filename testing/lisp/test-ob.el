@@ -668,8 +668,12 @@ x
       (check-eval "never-export" nil)
       (check-eval "no-export" nil))))
 
-(ert-deftest test-ob/noweb-expansion-1 ()
-  (org-test-with-temp-text "#+begin_src sh :results output :tangle yes
+(ert-deftest test-ob/noweb-expansion ()
+  ;; Standard test.
+  (should
+   (string=
+    "bar"
+    (org-test-with-temp-text "#+begin_src sh :results output :tangle yes
   <<foo>>
 #+end_src
 
@@ -677,22 +681,83 @@ x
 #+begin_src sh
   bar
 #+end_src"
-    (should (string= (org-babel-expand-noweb-references) "bar"))))
-
-(ert-deftest test-ob/noweb-expansion-2 ()
-  (org-test-with-temp-text "#+begin_src sh :results output :tangle yes
+      (org-babel-expand-noweb-references))))
+  ;; Handle :noweb-sep.
+  (should
+   (string=
+    "barbaz"
+    (org-test-with-temp-text "#+begin_src sh :results output :tangle yes
   <<foo>>
 #+end_src
 
-#+name: foo
-#+begin_src sh :noweb-sep \"\"
+#+begin_src sh :noweb-ref foo :noweb-sep \"\"
   bar
 #+end_src
 
 #+begin_src sh :noweb-ref foo :noweb-sep \"\"
   baz
 #+end_src"
-    (should (string= (org-babel-expand-noweb-references) "barbaz"))))
+      (org-babel-expand-noweb-references))))
+  ;; :noweb-ref is extracted from definition, not point of call.
+  (should
+   (string=
+    "(+ 1 1)"
+    (org-test-with-temp-text
+	"
+* Call
+:PROPERTIES:
+:header-args: :noweb-ref bar
+:END:
+
+<point>#+begin_src emacs-lisp :results output :tangle yes
+  <<foo>>
+#+end_src
+
+* Evaluation
+:PROPERTIES:
+:header-args: :noweb-ref foo
+:END:
+
+#+begin_src sh :noweb-sep \"\"
+  (+ 1 1)
+#+end_src"
+      (org-babel-expand-noweb-references))))
+  ;; Handle recursive expansion.
+  (should
+   (equal "baz"
+	  (org-test-with-temp-text "
+#+begin_src emacs-lisp :noweb yes<point>
+  <<foo>>
+#+end_src
+
+#+name: foo
+#+begin_src emacs-lisp :noweb yes
+  <<bar>>
+#+end_src
+
+#+name: bar
+#+begin_src emacs-lisp
+  baz
+#+end_src"
+	    (org-babel-expand-noweb-references))))
+  ;; During recursive expansion, obey to `:noweb' property.
+  (should
+   (equal "<<bar>>"
+	  (org-test-with-temp-text "
+#+begin_src emacs-lisp :noweb yes<point>
+  <<foo>>
+#+end_src
+
+#+name: foo
+#+begin_src emacs-lisp :noweb no
+  <<bar>>
+#+end_src
+
+#+name: bar
+#+begin_src emacs-lisp
+  baz
+#+end_src"
+	    (org-babel-expand-noweb-references)))))
 
 (ert-deftest test-ob/splitting-variable-lists-in-references ()
   (org-test-with-temp-text ""
@@ -889,27 +954,6 @@ x
 		       (buffer-substring-no-properties
 			(point-at-bol) (point-at-eol)))))))
 
-(defun test-ob-verify-result-and-removed-result (result buffer-text)
-  "Test helper function to test `org-babel-remove-result'.
-A temp buffer is populated with BUFFER-TEXT, the first block is executed,
-and the result of execution is verified against RESULT.
-
-The block is actually executed /twice/ to ensure result
-replacement happens correctly."
-  (org-test-with-temp-text
-      buffer-text
-    (org-babel-next-src-block) (org-babel-execute-maybe) (org-babel-execute-maybe)
-    (should (re-search-forward "\\#\\+results:" nil t))
-    (forward-line)
-    (should (string= result
-		     (buffer-substring-no-properties
-		      (point-at-bol)
-		      (- (point-max) 16))))
-    (org-babel-previous-src-block) (org-babel-remove-result)
-    (should (string= buffer-text
-		     (buffer-substring-no-properties
-		      (point-min) (point-max))))))
-
 (ert-deftest test-ob/org-babel-remove-result--results-default ()
   "Test `org-babel-remove-result' with default :results."
   (mapcar (lambda (language)
@@ -922,21 +966,6 @@ replacement happens correctly."
 
 * next heading")))
 	  '("sh" "emacs-lisp")))
-
-(ert-deftest test-ob/org-babel-remove-result--results-list ()
-  "Test `org-babel-remove-result' with :results list."
-  (test-ob-verify-result-and-removed-result
-   "- 1
-- 2
-- 3
-- (quote (4 5))"
-
-   "* org-babel-remove-result
-#+begin_src emacs-lisp :results list
-'(1 2 3 '(4 5))
-#+end_src
-
-* next heading"))
 
 (ert-deftest test-ob/org-babel-results-indented-wrap ()
   "Ensure that wrapped results are inserted correction when indented.
@@ -966,18 +995,6 @@ trying to find the :END: marker."
     (goto-char (point-min))
     (should (search-forward "[[file:foo][bar]]" nil t))
     (should (search-forward "[[file:foo][foo]]" nil t))))
-
-(ert-deftest test-ob/org-babel-remove-result--results-pp ()
-  "Test `org-babel-remove-result' with :results pp."
-  (test-ob-verify-result-and-removed-result
-   ": \"I /am/ working!\""
-
-   "* org-babel-remove-result
-#+begin_src emacs-lisp :results pp
-\"I /am/ working!\")
-#+end_src
-
-* next heading"))
 
 (ert-deftest test-ob/inline-src_blk-preceded-punct-preceded-by-point ()
   (let ((test-line ".src_emacs-lisp[ :results verbatim ]{ \"x\"  }")
@@ -1034,19 +1051,6 @@ replacement happens correctly."
 		     (buffer-substring-no-properties
 		      (point-min) (point-max))))))
 
-(ert-deftest test-ob/org-babel-remove-result--results-default ()
-  "Test `org-babel-remove-result' with default :results."
-  (mapcar (lambda (language)
-	    (test-ob-verify-result-and-removed-result
-	     "\n"
-	     (concat
-	      "* org-babel-remove-result
-#+begin_src " language "
-#+end_src
-
-* next heading")))
-	  '("sh" "emacs-lisp")))
-
 (ert-deftest test-ob/org-babel-remove-result--results-list ()
   "Test `org-babel-remove-result' with :results list."
   (test-ob-verify-result-and-removed-result
@@ -1065,9 +1069,9 @@ replacement happens correctly."
 (ert-deftest test-ob/org-babel-remove-result--results-wrap ()
   "Test `org-babel-remove-result' with :results wrap."
   (test-ob-verify-result-and-removed-result
-   ":RESULTS:
+   ":results:
 hello there
-:END:"
+:end:"
 
    "* org-babel-remove-result
 
@@ -1080,11 +1084,11 @@ hello there
 (ert-deftest test-ob/org-babel-remove-result--results-org ()
   "Test `org-babel-remove-result' with :results org."
   (test-ob-verify-result-and-removed-result
-   "#+BEGIN_SRC org
+   "#+begin_src org
 ,* heading
 ,** subheading
 content
-#+END_SRC"
+#+end_src"
 
    "* org-babel-remove-result
 #+begin_src emacs-lisp :results org
@@ -1098,9 +1102,9 @@ content\"
 (ert-deftest test-ob/org-babel-remove-result--results-html ()
   "Test `org-babel-remove-result' with :results html."
   (test-ob-verify-result-and-removed-result
-   "#+BEGIN_EXPORT html
+   "#+begin_export html
 <head><body></body></head>
-#+END_EXPORT"
+#+end_export"
 
    "* org-babel-remove-result
 #+begin_src emacs-lisp :results html
@@ -1112,11 +1116,11 @@ content\"
 (ert-deftest test-ob/org-babel-remove-result--results-latex ()
   "Test `org-babel-remove-result' with :results latex."
   (test-ob-verify-result-and-removed-result
-   "#+BEGIN_EXPORT latex
+   "#+begin_export latex
 Line 1
 Line 2
 Line 3
-#+END_EXPORT"
+#+end_export"
 
    "* org-babel-remove-result
 #+begin_src emacs-lisp :results latex
@@ -1131,9 +1135,9 @@ Line 3\"
   "Test `org-babel-remove-result' with :results code."
 
   (test-ob-verify-result-and-removed-result
-   "#+BEGIN_SRC emacs-lisp
+   "#+begin_src emacs-lisp
 \"I am working!\"
-#+END_SRC"
+#+end_src"
 
    "* org-babel-remove-result
 #+begin_src emacs-lisp :results code
@@ -1153,6 +1157,27 @@ Line 3\"
 #+end_src
 
 * next heading"))
+
+(ert-deftest test-ob/org-babel-remove-result--no-blank-line ()
+  "Test `org-babel-remove-result' without blank line between code and results."
+  (should
+   (equal "
+#+begin_src emacs-lisp
+  (+ 1 1)
+#+end_src
+#+results:
+: 2
+* next heading"
+	  (org-test-with-temp-text
+	      "
+<point>#+begin_src emacs-lisp
+  (+ 1 1)
+#+end_src
+#+results:
+: 2
+* next heading"
+	    (org-babel-execute-maybe)
+	    (buffer-string)))))
 
 (ert-deftest test-ob/results-do-not-replace-code-blocks ()
   (org-test-with-temp-text "Block two has a space after the name.
@@ -1291,9 +1316,10 @@ Line 3\"
 
 #+RESULTS: test
 : 4
-
+<point>
 Paragraph"
-      (narrow-to-region (point) (save-excursion (forward-line 7) (point)))
+      (narrow-to-region (point-min) (point))
+      (goto-char (point-min))
       (let ((org-babel-results-keyword "RESULTS"))
 	(org-babel-execute-src-block))
       (org-trim (buffer-string)))))
@@ -1405,7 +1431,57 @@ echo \"$data\"
       (org-babel-execute-src-block)
       (let ((case-fold-search t)) (search-forward "RESULTS"))
       (list (org-get-indentation)
-	    (progn (forward-line) (org-get-indentation)))))))
+	    (progn (forward-line) (org-get-indentation))))))
+  ;; Properly indent examplified blocks.
+  (should
+   (equal
+    "   #+begin_example
+   0
+   1
+   2
+   3
+   4
+   5
+   6
+   7
+   8
+   9
+   #+end_example
+"
+    (org-test-with-temp-text
+	"   #+begin_src emacs-lisp :results output
+   (dotimes (i 10) (princ i) (princ \"\\n\"))
+   #+end_src"
+      (org-babel-execute-src-block)
+      (search-forward "begin_example")
+      (downcase
+       (buffer-substring-no-properties (line-beginning-position)
+				       (point-max))))))
+  ;; Properly indent "org" blocks.
+  (should
+   (equal
+    "   #+begin_src org
+   0
+   1
+   2
+   3
+   4
+   5
+   6
+   7
+   8
+   9
+   #+end_src
+"
+    (org-test-with-temp-text
+	"   #+begin_src emacs-lisp :results output org
+   (dotimes (i 10) (princ i) (princ \"\\n\"))
+   #+end_src"
+      (org-babel-execute-src-block)
+      (search-forward "begin_src org")
+      (downcase
+       (buffer-substring-no-properties (line-beginning-position)
+				       (point-max)))))))
 
 (ert-deftest test-ob/safe-header-args ()
   "Detect safe and unsafe header args."

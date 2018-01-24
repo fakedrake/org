@@ -48,8 +48,9 @@ range.  INPUT2 can be omitted if clock hasn't finished yet.
 Return the clock line as a string."
   (let* ((beg (org-test-clock-create-timestamp input1 t t))
          (end (and input2 (org-test-clock-create-timestamp input2 t t)))
-         (sec-diff (and input2 (floor (- (org-time-string-to-seconds end)
-                                         (org-time-string-to-seconds beg))))))
+         (sec-diff (and input2
+			(floor (- (org-time-string-to-seconds end)
+				  (org-time-string-to-seconds beg))))))
     (concat org-clock-string " " beg
             (when end
               (concat "--" end " => "
@@ -343,15 +344,15 @@ the buffer."
   ;; line, and ignore "file" column.
   (should
    (equal
-    "| Headline     | Time       |     |
-|--------------+------------+-----|
-| *Total time* | *16905:01* | foo |
-|--------------+------------+-----|
-| Test         | 16905:01   | foo |
+    "| Headline     | Time   |     |
+|--------------+--------+-----|
+| *Total time* | *8:40* | foo |
+|--------------+--------+-----|
+| Test         | 8:40   | foo |
 #+TBLFM: $3=string(\"foo\")"
     (org-test-with-temp-text-in-file
         "* Test
-CLOCK: [2012-03-29 Thu 16:40]--[2014-03-04 Thu 00:41] => 16905:01"
+CLOCK: [2012-03-29 Thu 8:00]--[2012-03-29 Thu 16:40] => 8:40"
       (test-org-clock-clocktable-contents ":scope file-with-archives"
 	  "#+TBLFM: $3=string(\"foo\")"))))
   ;; Test "function" scope.
@@ -369,12 +370,12 @@ CLOCK: [2012-03-29 Thu 16:00]--[2012-03-29 Thu 17:00] =>  1:00"
 (ert-deftest test-org-clock/clocktable/maxlevel ()
   "Test \":maxlevel\" parameter in Clock table."
   (should
-   (equal "| Headline     | Time   |      |   |
-|--------------+--------+------+---|
-| *Total time* | *6:00* |      |   |
-|--------------+--------+------+---|
-| Foo          | 6:00   |      |   |
-| \\_  Bar      |        | 2:00 |   |"
+   (equal "| Headline     | Time   |      |
+|--------------+--------+------|
+| *Total time* | *6:00* |      |
+|--------------+--------+------|
+| Foo          | 6:00   |      |
+| \\_  Bar      |        | 2:00 |"
           (org-test-with-temp-text
               "* Foo
 CLOCK: [2016-12-28 Wed 11:09]--[2016-12-28 Wed 15:09] =>  4:00
@@ -538,11 +539,11 @@ CLOCK: [2016-12-28 Wed 13:09]--[2016-12-28 Wed 15:09] =>  2:00"
   ;; the headline.
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text
 	"* Foo
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
@@ -550,11 +551,11 @@ CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
   ;; Otherwise, link to the headline in the current file.
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[file:filename::Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[file:filename::Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text-in-file
 	"* Foo
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
@@ -566,44 +567,44 @@ CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
   ;; headline.
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text
 	"* TODO Foo
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
       (test-org-clock-clocktable-contents ":link t"))))
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text
 	"* [#A] Foo
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
       (test-org-clock-clocktable-contents ":link t"))))
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text
 	"* COMMENT Foo
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
       (test-org-clock-clocktable-contents ":link t"))))
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text
 	"* Foo :tag:
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
@@ -611,22 +612,22 @@ CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
   ;; Remove statistics cookie from headline description.
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text
 	"* Foo [50%]
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
       (test-org-clock-clocktable-contents ":link t"))))
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo][Foo]]          | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo][Foo]]          | 26:00   |"
     (org-test-with-temp-text
 	"* Foo [1/2]
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
@@ -635,24 +636,24 @@ CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
   ;; links if there is no description.
   (should
    (equal
-    "| Headline     | Time    |   |
-|--------------+---------+---|
-| *Total time* | *26:00* |   |
-|--------------+---------+---|
-| [[Foo%20%5B%5Bhttp://orgmode.org%5D%5BOrg%20mode%5D%5D][Foo Org mode]] | 26:00   |   |"
+    "| Headline     | Time    |
+|--------------+---------|
+| *Total time* | *26:00* |
+|--------------+---------|
+| [[Foo %5B%5Bhttps://orgmode.org%5D%5BOrg mode%5D%5D][Foo Org mode]] | 26:00   |"
     (org-test-with-temp-text
-	"* Foo [[http://orgmode.org][Org mode]]
+	"* Foo [[https://orgmode.org][Org mode]]
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
       (test-org-clock-clocktable-contents ":link t"))))
   (should
    (equal
-    "| Headline               | Time    |   |
-|------------------------+---------+---|
-| *Total time*           | *26:00* |   |
-|------------------------+---------+---|
-| [[Foo%20%5B%5Bhttp://orgmode.org%5D%5D][Foo http://orgmode.org]] | 26:00   |   |"
+    "| Headline                | Time    |
+|-------------------------+---------|
+| *Total time*            | *26:00* |
+|-------------------------+---------|
+| [[Foo %5B%5Bhttps://orgmode.org%5D%5D][Foo https://orgmode.org]] | 26:00   |"
     (org-test-with-temp-text
-	"* Foo [[http://orgmode.org]]
+	"* Foo [[https://orgmode.org]]
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
       (test-org-clock-clocktable-contents ":link t")))))
 
@@ -735,11 +736,11 @@ CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
   ;; Include a new column with list properties.
   (should
    (equal
-    "| A | Headline     | Time    |   |
-|---+--------------+---------+---|
-|   | *Total time* | *26:00* |   |
-|---+--------------+---------+---|
-| 1 | Foo          | 26:00   |   |"
+    "| A | Headline     | Time    |
+|---+--------------+---------|
+|   | *Total time* | *26:00* |
+|---+--------------+---------|
+| 1 | Foo          | 26:00   |"
     (org-test-with-temp-text
         "* Foo
 :PROPERTIES:
@@ -767,11 +768,11 @@ CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
   ;; Handle missing properties.
   (should
    (equal
-    "| A | Headline     | Time    |   |
-|---+--------------+---------+---|
-|   | *Total time* | *26:00* |   |
-|---+--------------+---------+---|
-| 1 | Foo          | 26:00   |   |"
+    "| A | Headline     | Time    |
+|---+--------------+---------|
+|   | *Total time* | *26:00* |
+|---+--------------+---------|
+| 1 | Foo          | 26:00   |"
     (org-test-with-temp-text
         "* Foo
 :PROPERTIES:
@@ -779,6 +780,189 @@ CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
 :END:
 CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
       (test-org-clock-clocktable-contents ":properties (\"A\")")))))
+
+(ert-deftest test-org-clock/clocktable/tcolumns ()
+  "Test \":tcolumns\" parameter in Clock table."
+  ;; When :tcolumns is smaller than the deepest headline level, lump
+  ;; lower levels in the last column.
+  (should
+   (equal
+    "| Headline     |    Time |
+|--------------+---------|
+| *Total time* | *52:00* |
+|--------------+---------|
+| Foo          |   52:00 |
+| \\_  Bar      |   26:00 |"
+    (org-test-with-temp-text
+        "* Foo
+CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00
+** Bar
+CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
+      (test-org-clock-clocktable-contents ":tcolumns 1"))))
+  ;; :tcolumns cannot create more columns than the deepest headline
+  ;; level.
+  (should
+   (equal
+    "| Headline     | Time    |       |
+|--------------+---------+-------|
+| *Total time* | *52:00* |       |
+|--------------+---------+-------|
+| Foo          | 52:00   |       |
+| \\_  Bar      |         | 26:00 |"
+    (org-test-with-temp-text
+        "* Foo
+CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00
+** Bar
+CLOCK: [2016-12-27 Wed 13:09]--[2016-12-28 Wed 15:09] => 26:00"
+      (test-org-clock-clocktable-contents ":tcolumns 3"))))
+  ;; Pathological case: when no headline contributes to the total
+  ;; time, there is only one time column.
+  (should
+   (equal "| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *0:00* |"
+          (org-test-with-temp-text
+              "* Foo
+CLOCK: [2016-12-28 Wed 11:09]--[2016-12-28 Wed 11:09] =>  0:00
+** Bar
+CLOCK: [2016-12-28 Wed 13:09]--[2016-12-28 Wed 13:09] =>  0:00"
+            (test-org-clock-clocktable-contents ":tcolumns 2")))))
+
+(ert-deftest test-org-clock/clocktable/step ()
+  "Test \":step\" parameter in Clock table."
+  ;; Regression test: week crossing month boundary before :wstart
+  ;; day-of-week.
+  (should
+   (equal "
+Weekly report starting on: [2017-09-25 Mon]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *1:00* |
+|--------------+--------|
+| Foo          | 1:00   |"
+	  (org-test-with-temp-text
+	      "* Foo
+CLOCK: [2017-09-30 Sat 12:00]--[2017-09-30 Sat 13:00] =>  1:00
+CLOCK: [2017-10-01 Sun 11:00]--[2017-10-01 Sun 13:00] =>  2:00
+CLOCK: [2017-10-02 Mon 11:00]--[2017-10-02 Mon 14:00] =>  3:00"
+	    (let ((system-time-locale "en_US"))
+	      (test-org-clock-clocktable-contents
+		  ":step week :block 2017-09 :stepskip0 t")))))
+  (should
+   (equal "
+Weekly report starting on: [2017-10-01 Sun]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *2:00* |
+|--------------+--------|
+| Foo          | 2:00   |
+
+Weekly report starting on: [2017-10-02 Mon]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *7:00* |
+|--------------+--------|
+| Foo          | 7:00   |
+
+Weekly report starting on: [2017-10-09 Mon]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *5:00* |
+|--------------+--------|
+| Foo          | 5:00   |
+"
+	  (org-test-with-temp-text
+	      "* Foo
+CLOCK: [2017-09-30 Sat 12:00]--[2017-09-30 Sat 13:00] =>  1:00
+CLOCK: [2017-10-01 Sun 11:00]--[2017-10-01 Sun 13:00] =>  2:00
+CLOCK: [2017-10-02 Mon 11:00]--[2017-10-02 Mon 14:00] =>  3:00
+CLOCK: [2017-10-08 Sun 09:00]--[2017-10-08 Sun 13:00] =>  4:00
+CLOCK: [2017-10-09 Mon 09:00]--[2017-10-09 Mon 14:00] =>  5:00"
+	    (let ((system-time-locale "en_US"))
+	      (test-org-clock-clocktable-contents
+		  ":step week :block 2017-10 :stepskip0 t")))))
+  ;; :step day
+  (should
+   (equal "
+Daily report: [2017-10-02 Mon]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *3:00* |
+|--------------+--------|
+| Foo          | 3:00   |
+
+Daily report: [2017-10-03 Tue]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *0:00* |
+
+Daily report: [2017-10-04 Wed]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *0:00* |
+
+Daily report: [2017-10-05 Thu]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *0:00* |
+
+Daily report: [2017-10-06 Fri]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *0:00* |
+
+Daily report: [2017-10-07 Sat]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *0:00* |
+
+Daily report: [2017-10-08 Sun]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *4:00* |
+|--------------+--------|
+| Foo          | 4:00   |"
+	  (org-test-with-temp-text
+	      "* Foo
+CLOCK: [2017-09-30 Sat 12:00]--[2017-09-30 Sat 13:00] =>  1:00
+CLOCK: [2017-10-01 Sun 11:00]--[2017-10-01 Sun 13:00] =>  2:00
+CLOCK: [2017-10-02 Mon 11:00]--[2017-10-02 Mon 14:00] =>  3:00
+CLOCK: [2017-10-08 Sun 09:00]--[2017-10-08 Sun 13:00] =>  4:00
+CLOCK: [2017-10-09 Mon 09:00]--[2017-10-09 Mon 14:00] =>  5:00"
+	    (let ((system-time-locale "en_US"))
+	      (test-org-clock-clocktable-contents
+		  ":step day :block 2017-W40")))))
+  ;; Regression test: take :tstart and :tend hours into consideration.
+  (should
+   (equal "
+Weekly report starting on: [2017-12-25 Mon]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *8:00* |
+|--------------+--------|
+| Foo          | 8:00   |"
+	  (org-test-with-temp-text
+	      "* Foo
+CLOCK: [2017-12-27 Wed 08:00]--[2017-12-27 Wed 16:00] =>  8:00"
+	    (let ((system-time-locale "en_US"))
+	      (test-org-clock-clocktable-contents
+		  (concat ":step week :tstart \"<2017-12-25 Mon>\" "
+			  ":tend \"<2017-12-27 Wed 23:59>\""))))))
+  (should
+   (equal "
+Daily report: [2017-12-27 Wed]
+| Headline     | Time   |
+|--------------+--------|
+| *Total time* | *8:00* |
+|--------------+--------|
+| Foo          | 8:00   |"
+	  (org-test-with-temp-text
+	      "* Foo
+CLOCK: [2017-12-27 Wed 08:00]--[2017-12-27 Wed 16:00] =>  8:00"
+	    (let ((system-time-locale "en_US"))
+	      (test-org-clock-clocktable-contents
+		  (concat ":step day :tstart \"<2017-12-25 Mon>\" "
+			  ":tend \"<2017-12-27 Wed 23:59>\" :stepskip0 t")))))))
 
 (provide 'test-org-clock)
 ;;; test-org-clock.el end here

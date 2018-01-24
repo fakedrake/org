@@ -1,10 +1,10 @@
 ;;; org-inlinetask.el --- Tasks Independent of Outline Hierarchy -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2018 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -114,7 +114,7 @@ When nil, the first star is not shown."
 (defcustom org-inlinetask-default-state nil
   "Non-nil means make inline tasks have a TODO keyword initially.
 This should be the state `org-inlinetask-insert-task' should use by
-default, or nil of no state should be assigned."
+default, or nil if no state should be assigned."
   :group 'org-inlinetask
   :version "24.1"
   :type '(choice
@@ -123,7 +123,8 @@ default, or nil of no state should be assigned."
 
 (defun org-inlinetask-insert-task (&optional no-state)
   "Insert an inline task.
-If prefix arg NO-STATE is set, ignore `org-inlinetask-default-state'."
+If prefix arg NO-STATE is set, ignore `org-inlinetask-default-state'.
+If there is a region wrap it inside the inline task."
   (interactive "P")
   ;; Error when inside an inline task, except if point was at its very
   ;; beginning, in which case the new inline task will be inserted
@@ -135,13 +136,19 @@ If prefix arg NO-STATE is set, ignore `org-inlinetask-default-state'."
   (let* ((indent (if org-odd-levels-only
 		     (1- (* 2 org-inlinetask-min-level))
 		   org-inlinetask-min-level))
-	 (indent-string (concat (make-string indent ?*) " ")))
+	 (indent-string (concat (make-string indent ?*) " "))
+	 (rbeg (if (org-region-active-p) (region-beginning) (point)))
+	 (rend (if (org-region-active-p) (region-end) (point))))
+    (goto-char rend)
+    (insert "\n" indent-string "END\n")
+    (goto-char rbeg)
+    (unless (bolp) (insert "\n"))
     (insert indent-string
 	    (if (or no-state (not org-inlinetask-default-state))
-		"\n"
-	      (concat org-inlinetask-default-state " \n"))
-	    indent-string "END\n"))
-  (end-of-line -1))
+		""
+	      (concat org-inlinetask-default-state " "))
+	    (if (= rend rbeg) "" "\n"))
+    (unless (= rend rbeg) (end-of-line 0))))
 (define-key org-mode-map "\C-c\C-xt" 'org-inlinetask-insert-task)
 
 (defun org-inlinetask-outline-regexp ()
@@ -182,24 +189,28 @@ The number of levels is controlled by `org-inlinetask-min-level'."
 
 (defun org-inlinetask-goto-end ()
   "Go to the end of the inline task at point.
-Return point."
+    Return point."
   (save-match-data
     (beginning-of-line)
     (let* ((case-fold-search t)
-	   (inlinetask-re (org-inlinetask-outline-regexp))
-	   (task-end-re (concat inlinetask-re "END[ \t]*$")))
+           (inlinetask-re (org-inlinetask-outline-regexp))
+           (task-end-re (concat inlinetask-re "END[ \t]*$")))
       (cond
-       ((looking-at task-end-re))
-       ((looking-at inlinetask-re)
-	(forward-line)
-	(cond
-	 ((looking-at task-end-re))
-	 ((looking-at inlinetask-re))
-	 ((org-inlinetask-in-task-p)
-	  (re-search-forward inlinetask-re nil t))))
-       (t (re-search-forward inlinetask-re nil t)))
-      (end-of-line)
-      (point))))
+       ((looking-at-p task-end-re)
+        (forward-line))
+       ((looking-at-p inlinetask-re)
+        (forward-line)
+        (cond
+         ((looking-at-p task-end-re) (forward-line))
+         ((looking-at-p inlinetask-re))
+         ((org-inlinetask-in-task-p)
+          (re-search-forward inlinetask-re nil t)
+          (forward-line))
+         (t nil)))
+       (t
+        (re-search-forward inlinetask-re nil t)
+        (forward-line)))))
+  (point))
 
 (defun org-inlinetask-get-task-level ()
   "Get the level of the inline task around.
@@ -313,9 +324,8 @@ If the task has an end part, also demote it."
      ((= end start))
      ;; Inlinetask was folded: expand it.
      ((eq (get-char-property (1+ start) 'invisible) 'outline)
-      (outline-flag-region start end nil)
-      (org-cycle-hide-drawers 'children))
-     (t (outline-flag-region start end t)))))
+      (org-flag-region start end nil 'outline))
+     (t (org-flag-region start end t 'outline)))))
 
 (defun org-inlinetask-hide-tasks (state)
   "Hide inline tasks in buffer when STATE is `contents' or `children'.
@@ -330,7 +340,9 @@ This function is meant to be used in `org-cycle-hook'."
 	   (org-inlinetask-goto-end)))))
     (`children
      (save-excursion
-       (while (and (outline-next-heading) (org-inlinetask-at-task-p))
+       (while
+	   (or (org-inlinetask-at-task-p)
+	       (and (outline-next-heading) (org-inlinetask-at-task-p)))
 	 (org-inlinetask-toggle-visibility)
 	 (org-inlinetask-goto-end))))))
 

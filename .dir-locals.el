@@ -1,9 +1,15 @@
-;; - keep in sync dir-locals.el (for Emacs >= 24) with .dir-settings.el
-;;   (for Emacs < 24)
-;; - don't use a symbolic link to prevent problems on cygwin
-;;   distributions (commit 971b9eeacd38959439ddaa7c650430cc2dcb673e)
+;;; Directory Local Variables
+;;; For more information see (info "(emacs) Directory Variables")
 
-((nil . ((indent-tabs-mode . t)
-	 (tab-width . 8)
-	 (fill-column . 70)
-	 (sentence-end-double-space . t))))
+((nil
+  (indent-tabs-mode . t)
+  (tab-width . 8)
+  (fill-column . 70)
+  (sentence-end-double-space . t))
+ (org-mode
+  (indent-tabs-mode)
+  (org-edit-src-content-indentation . 2)
+  (org-adapt-indentation)))
+
+
+

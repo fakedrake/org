@@ -365,5 +365,121 @@ This is a tab:\t.
 	(org-edit-src-exit)
 	(buffer-string))))))
 
+(ert-deftest test-org-src/footnote-references ()
+  "Test editing footnote references."
+  ;; Error when there is no definition to edit.
+  (should-error
+   (org-test-with-temp-text "A footnote<point>[fn:1]"
+     (org-edit-special)))
+  ;; Error when trying to edit an anonymous footnote.
+  (should-error
+   (org-test-with-temp-text "A footnote[fn::<point>edit me!]"
+     (org-edit-special)))
+  ;; Edit a regular definition.
+  (should
+   (equal "[fn:1] Definition"
+	  (org-test-with-temp-text "A footnote<point>[fn:1]\n[fn:1] Definition"
+	    (org-edit-special)
+	    (prog1 (buffer-string) (org-edit-src-exit)))))
+  ;; Label should be protected against editing.
+  (should
+   (org-test-with-temp-text "A footnote<point>[fn:1]\n[fn:1] Definition"
+     (org-edit-special)
+     (prog1 (get-text-property 0 'read-only (buffer-string))
+       (org-edit-src-exit))))
+  (should
+   (org-test-with-temp-text "A footnote<point>[fn:1]\n[fn:1] Definition"
+     (org-edit-special)
+     (prog1 (get-text-property 5 'read-only (buffer-string))
+       (org-edit-src-exit))))
+  ;; Edit a regular definition.
+  (should
+   (equal
+    "A footnote[fn:1][fn:2]\n[fn:1] D1\n\n[fn:2] D2"
+    (org-test-with-temp-text
+	"A footnote<point>[fn:1][fn:2]\n[fn:1] D1\n\n[fn:2] D2"
+      (org-edit-special)
+      (org-edit-src-exit)
+      (buffer-string))))
+  ;; Edit an inline definition.
+  (should
+   (equal
+    "[fn:1:definition]"
+    (org-test-with-temp-text
+	"An inline<point>[fn:1] footnote[fn:1:definition]"
+      (org-edit-special)
+      (prog1 (buffer-string) (org-edit-src-exit)))))
+  ;; Label and closing square bracket should be protected against
+  ;; editing.
+  (should
+   (org-test-with-temp-text "An inline<point>[fn:1] footnote[fn:1:definition]"
+     (org-edit-special)
+     (prog1 (get-text-property 0 'read-only (buffer-string))
+       (org-edit-src-exit))))
+  (should
+   (org-test-with-temp-text "An inline<point>[fn:1] footnote[fn:1:definition]"
+     (org-edit-special)
+     (prog1 (get-text-property 5 'read-only (buffer-string))
+       (org-edit-src-exit))))
+  (should
+   (org-test-with-temp-text "An inline<point>[fn:1] footnote[fn:1:definition]"
+     (org-edit-special)
+     (prog1 (get-text-property 16 'read-only (buffer-string))
+       (org-edit-src-exit))))
+  ;; Do not include trailing white spaces when displaying the inline
+  ;; footnote definition.
+  (should
+   (equal
+    "[fn:1:definition]"
+    (org-test-with-temp-text
+	"An inline<point>[fn:1] footnote[fn:1:definition]    and some text"
+      (org-edit-special)
+      (prog1 (buffer-string) (org-edit-src-exit)))))
+  ;; Preserve local variables when editing a footnote definition.
+  (should
+   (eq 'bar
+       (org-test-with-temp-text "A footnote<point>[fn:1]\n[fn:1] Definition"
+	 (setq-local foo 'bar)
+	 (org-edit-special)
+	 (prog1 foo (org-edit-src-exit))))))
+
+;;; Code escaping
+
+(ert-deftest test-org-src/escape-code-in-string ()
+  "Test `org-escape-code-in-string' specifications."
+  ;; Escape lines starting with "*" or "#+".
+  (should (equal ",*" (org-escape-code-in-string "*")))
+  (should (equal ",#+" (org-escape-code-in-string "#+")))
+  ;; Escape lines starting with ",*" and ",#+".  Number of leading
+  ;; commas does not matter.
+  (should (equal ",,*" (org-escape-code-in-string ",*")))
+  (should (equal ",,#+" (org-escape-code-in-string ",#+")))
+  (should (equal ",,,*" (org-escape-code-in-string ",,*")))
+  (should (equal ",,,#+" (org-escape-code-in-string ",,#+")))
+  ;; Indentation does not matter.
+  (should (equal " ,*" (org-escape-code-in-string " *")))
+  (should (equal " ,#+" (org-escape-code-in-string " #+")))
+  ;; Do nothing on other cases.
+  (should (equal "a" (org-escape-code-in-string "a")))
+  (should (equal "#" (org-escape-code-in-string "#")))
+  (should (equal "," (org-escape-code-in-string ","))))
+
+(ert-deftest test-org-src/unescape-code-in-string ()
+  "Test `org-unescape-code-in-string' specifications."
+  ;; Unescape lines starting with ",*" or ",#+".  Number of leading
+  ;; commas does not matter.
+  (should (equal "*" (org-unescape-code-in-string ",*")))
+  (should (equal "#+" (org-unescape-code-in-string ",#+")))
+  (should (equal ",*" (org-unescape-code-in-string ",,*")))
+  (should (equal ",#+" (org-unescape-code-in-string ",,#+")))
+  ;; Indentation does not matter.
+  (should (equal " *" (org-unescape-code-in-string " ,*")))
+  (should (equal " #+" (org-unescape-code-in-string " ,#+")))
+  ;; Do nothing on other cases.
+  (should (equal "a" (org-unescape-code-in-string "a")))
+  (should (equal "#" (org-unescape-code-in-string "#")))
+  (should (equal "," (org-unescape-code-in-string ","))))
+
+
 (provide 'test-org-src)
 ;;; test-org-src.el ends here

@@ -232,6 +232,38 @@ num:2 <:active")))
 		org-test-dir)
       (org-export--get-inbuffer-options))
     '(:language "fr" :select-tags ("a" "b" "c") :title ("a b c"))))
+  ;; Options set through SETUPFILE specified using a URL.
+  (let ((buffer (generate-new-buffer "url-retrieve-output")))
+    (unwind-protect
+	;; Simulate successful retrieval of a setupfile from URL.
+	(cl-letf (((symbol-function 'url-retrieve-synchronously)
+		   (lambda (&rest_)
+		     (with-current-buffer buffer
+		       (insert "HTTP/1.1 200 OK
+
+# Contents of http://link-to-my-setupfile.org
+#+BIND: variable value
+#+DESCRIPTION: l2
+#+LANGUAGE: en
+#+SELECT_TAGS: b
+#+TITLE: b
+#+PROPERTY: a 1
+"))
+		     buffer)))
+	  (should
+	   (equal
+	    (org-test-with-temp-text
+		"#+DESCRIPTION: l1
+#+LANGUAGE: es
+#+SELECT_TAGS: a
+#+TITLE: a
+#+SETUPFILE: \"http://link-to-my-setupfile.org\"
+#+LANGUAGE: fr
+#+SELECT_TAGS: c
+#+TITLE: c"
+	      (org-export--get-inbuffer-options))
+	    '(:language "fr" :select-tags ("a" "b" "c") :title ("a b c")))))
+      (kill-buffer buffer)))
   ;; More than one property can refer to the same buffer keyword.
   (should
    (equal '(:k2 "value" :k1 "value")
@@ -1400,15 +1432,14 @@ Footnotes[fn:2], foot[fn:test] and [fn:inline:inline footnote]
   (should-error
    (org-test-with-temp-text "{{{missing}}}"
      (org-export-as (org-test-default-backend))))
-  ;; Macros defined in commented subtrees are ignored.
-  (should-error
-   (org-test-with-temp-text
-       "* COMMENT H\n#+MACRO: macro1\n* H2\nvalue\n{{{macro1}}}"
-     (org-export-as (org-test-default-backend))))
-  (should-error
-   (org-test-with-temp-text
-       "* COMMENT H\n** H2\n#+MACRO: macro1\n* H3\nvalue\n{{{macro1}}}"
-     (org-export-as (org-test-default-backend)))))
+  ;; Inline source blocks generate {{{results}}} macros.  Evaluate
+  ;; those.
+  (should
+   (equal "=2=\n"
+	  (org-test-with-temp-text "src_emacs-lisp{(+ 1 1)}"
+	    (let ((org-export-use-babel t)
+		  (org-babel-inline-result-wrap "=%s="))
+	      (org-export-as (org-test-default-backend)))))))
 
 (ert-deftest test-org-export/before-processing-hook ()
   "Test `org-export-before-processing-hook'."
@@ -1748,12 +1779,19 @@ Footnotes[fn:2], foot[fn:test] and [fn:inline:inline footnote]
    (equal "Success"
 	  (let (org-export-registered-backends)
 	    (org-export-define-backend 'test
-	      '((plain-text . (lambda (text contents info) "Failure"))))
+	      '((verbatim . (lambda (text contents info) "Failure"))))
 	    (org-export-define-backend 'test2
-	      '((plain-text . (lambda (text contents info) "Success"))))
-	    (org-export-with-backend 'test2 "Test"))))
+	      '((verbatim . (lambda (text contents info) "Success"))))
+	    (org-export-with-backend 'test2 '(verbatim (:value "=Test="))))))
+  ;; Corner case: plain-text transcoders have a different arity.
+  (should
+   (equal "Success"
+	  (org-export-with-backend
+	   (org-export-create-backend
+	    :transcoders '((plain-text . (lambda (text info) "Success"))))
+	   "Test")))
   ;; Provide correct back-end if transcoder needs to use recursive
-  ;; calls anyway.
+  ;; calls.
   (should
    (equal "Success\n"
 	  (let ((test-back-end
@@ -2451,11 +2489,11 @@ Para2"
      (org-export-numbered-headline-p
       (org-element-map tree 'headline #'identity info t)
       info)))
-  ;; UNNUMBERED ignores inheritance.  Any non-nil value among
-  ;; ancestors disables numbering.
+  ;; UNNUMBERED is inherited.
   (should
-   (org-test-with-parsed-data
-       "* H
+   (equal '(unnumbered numbered unnumbered)
+	  (org-test-with-parsed-data
+	      "* H
 :PROPERTIES:
 :UNNUMBERED: t
 :END:
@@ -2463,10 +2501,12 @@ Para2"
 :PROPERTIES:
 :UNNUMBERED: nil
 :END:
-*** H3"
-     (cl-every
-      (lambda (h) (not (org-export-numbered-headline-p h info)))
-      (org-element-map tree 'headline #'identity info)))))
+** H3"
+	    (org-element-map tree 'headline
+	      (lambda (h)
+		(if (org-export-numbered-headline-p h info) 'numbered
+		  'unnumbered))
+	      info)))))
 
 (ert-deftest test-org-export/number-to-roman ()
   "Test `org-export-number-to-roman' specifications."
@@ -2652,7 +2692,13 @@ Para2"
       (org-test-with-parsed-data "* Headline\n* Headline 2 :ignore:"
 	(org-element-map tree 'headline
 	  (lambda (h) (if (org-export-last-sibling-p h info) 'yes 'no))
-	  info))))))
+	  info)))))
+  ;; Handle gracefully discontinuous headings.
+  (should
+   (equal '(yes yes)
+	  (org-test-with-parsed-data "** S\n* H"
+	    (org-element-map tree 'headline
+	      (lambda (h) (if (org-export-last-sibling-p h info) 'yes 'no)))))))
 
 (ert-deftest test-org-export/handle-inlinetasks ()
   "Test inlinetask export."
@@ -2797,19 +2843,19 @@ Para2"
   "Test `org-export-insert-image-links' specifications."
   (should-not
    (member "file"
-	   (org-test-with-parsed-data "[[http://orgmode.org][file:image.png]]"
+	   (org-test-with-parsed-data "[[https://orgmode.org][file:image.png]]"
 	     (org-element-map tree 'link
 	       (lambda (l) (org-element-property :type l))))))
   (should
    (member "file"
-	   (org-test-with-parsed-data "[[http://orgmode.org][file:image.png]]"
+	   (org-test-with-parsed-data "[[https://orgmode.org][file:image.png]]"
 	     (org-element-map (org-export-insert-image-links tree info) 'link
 	       (lambda (l) (org-element-property :type l))))))
   ;; Properly set `:parent' property when replace contents with image
   ;; link.
   (should
    (memq 'link
-	 (org-test-with-parsed-data "[[http://orgmode.org][file:image.png]]"
+	 (org-test-with-parsed-data "[[https://orgmode.org][file:image.png]]"
 	   (org-element-map (org-export-insert-image-links tree info) 'link
 	     (lambda (l)
 	       (org-element-type (org-element-property :parent l)))))))
@@ -2817,12 +2863,12 @@ Para2"
   ;; images.
   (should-not
    (member "file"
-	   (org-test-with-parsed-data "[[http://orgmode.org][file:image.xxx]]"
+	   (org-test-with-parsed-data "[[https://orgmode.org][file:image.xxx]]"
 	     (org-element-map (org-export-insert-image-links tree info) 'link
 	       (lambda (l) (org-element-property :type l))))))
   (should
    (member "file"
-	   (org-test-with-parsed-data "[[http://orgmode.org][file:image.xxx]]"
+	   (org-test-with-parsed-data "[[https://orgmode.org][file:image.xxx]]"
 	     (org-element-map
 		 (org-export-insert-image-links tree info '(("file" . "xxx")))
 		 'link
@@ -3344,8 +3390,8 @@ Another text. (ref:text)
   (should (equal (concat (if (memq system-type '(windows-nt cygwin)) "file:///" "file://") (expand-file-name "/local.org"))
 		 (org-export-file-uri "/local.org")))
   ;; Remote files start with "file://"
-  (should (equal "file://myself@some.where:papers/last.pdf"
-		 (org-export-file-uri "/myself@some.where:papers/last.pdf")))
+  (should (equal "file://ssh:myself@some.where:papers/last.pdf"
+		 (org-export-file-uri "/ssh:myself@some.where:papers/last.pdf")))
   (should (equal "file://localhost/etc/fstab"
 		 (org-export-file-uri "//localhost/etc/fstab")))
   ;; Expand filename starting with "~".
@@ -4263,39 +4309,166 @@ Another text. (ref:text)
   "Test `org-export-collect-headlines' specifications."
   ;; Standard test.
   (should
-   (= 2
-      (length
-       (org-test-with-parsed-data "* H1\n** H2"
-	 (org-export-collect-headlines info)))))
+   (equal '("H1" "H2")
+	  (org-test-with-parsed-data "* H1\n** H2"
+	    (mapcar (lambda (h) (org-element-property :raw-value h))
+		    (org-export-collect-headlines info)))))
   ;; Do not collect headlines below optional argument.
   (should
-   (= 1
-      (length
-       (org-test-with-parsed-data "* H1\n** H2"
-	 (org-export-collect-headlines info 1)))))
+   (equal '("H1")
+	  (org-test-with-parsed-data "* H1\n** H2"
+	    (mapcar (lambda (h) (org-element-property :raw-value h))
+		    (org-export-collect-headlines info 1)))))
   ;; Never collect headlines below maximum headline level.
   (should
-   (= 1
-      (length
-       (org-test-with-parsed-data "#+OPTIONS: H:1\n* H1\n** H2"
-	 (org-export-collect-headlines info)))))
+   (equal '("H1")
+	  (org-test-with-parsed-data "#+OPTIONS: H:1\n* H1\n** H2"
+	    (mapcar (lambda (h) (org-element-property :raw-value h))
+		    (org-export-collect-headlines info)))))
   (should
-   (= 1
-      (length
-       (org-test-with-parsed-data "#+OPTIONS: H:1\n* H1\n** H2"
-	 (org-export-collect-headlines info 2)))))
+   (equal '("H1")
+	  (org-test-with-parsed-data "#+OPTIONS: H:1\n* H1\n** H2"
+	    (mapcar (lambda (h) (org-element-property :raw-value h))
+		    (org-export-collect-headlines info 2)))))
+  ;; Do not collect footnote section.
+  (should
+   (equal '("H1")
+	  (let ((org-footnote-section "Footnotes"))
+	    (org-test-with-parsed-data "* H1\n** Footnotes"
+	      (mapcar (lambda (h) (org-element-property :raw-value h))
+		      (org-export-collect-headlines info))))))
+  ;; Do not collect headlines with UNNUMBERED property set to "notoc".
+  ;; Headlines with another value for the property are still
+  ;; collected.  UNNUMBERED property is inherited.
+  (should
+   (equal '("H1")
+	  (org-test-with-parsed-data
+	      "* H1\n* H2\n:PROPERTIES:\n:UNNUMBERED: notoc\n:END:"
+	    (mapcar (lambda (h) (org-element-property :raw-value h))
+		    (org-export-collect-headlines info)))))
+  (should-not
+   (org-test-with-parsed-data
+       "* H1\n:PROPERTIES:\n:UNNUMBERED: notoc\n:END:\n** H2"
+     (mapcar (lambda (h) (org-element-property :raw-value h))
+	     (org-export-collect-headlines info))))
+  (should
+   (equal '("H1" "H2")
+	  (org-test-with-parsed-data
+	      "* H1\n* H2\n:PROPERTIES:\n:UNNUMBERED: t\n:END:"
+	    (mapcar (lambda (h) (org-element-property :raw-value h))
+		    (org-export-collect-headlines info)))))
   ;; Collect headlines locally.
   (should
-   (= 2
-      (org-test-with-parsed-data "* H1\n** H2\n** H3"
-	(let ((scope (org-element-map tree 'headline #'identity info t)))
-	  (length (org-export-collect-headlines info nil scope))))))
+   (equal '("H2" "H3")
+	  (org-test-with-parsed-data "* H1\n** H2\n** H3"
+	    (let ((scope (org-element-map tree 'headline #'identity info t)))
+	      (mapcar (lambda (h) (org-element-property :raw-value h))
+		      (org-export-collect-headlines info nil scope))))))
   ;; When collecting locally, optional level is relative.
   (should
-   (= 1
-      (org-test-with-parsed-data "* H1\n** H2\n*** H3"
-	(let ((scope (org-element-map tree 'headline #'identity info t)))
-	  (length (org-export-collect-headlines info 1 scope)))))))
+   (equal '("H2")
+	  (org-test-with-parsed-data "* H1\n** H2\n*** H3"
+	    (let ((scope (org-element-map tree 'headline #'identity info t)))
+	      (mapcar (lambda (h) (org-element-property :raw-value h))
+		      (org-export-collect-headlines info 1 scope)))))))
+
+(ert-deftest test-org-export/excluded-from-toc-p ()
+  "Test `org-export-excluded-from-toc-p' specifications."
+  ;; By default, headlines are not excluded.
+  (should-not
+   (org-test-with-parsed-data "* H1"
+     (org-element-map tree 'headline
+       (lambda (h) (org-export-excluded-from-toc-p h info)) info t)))
+  ;; Exclude according to a maximum level.
+  (should
+   (equal '(in out)
+	  (org-test-with-parsed-data "#+OPTIONS: H:1\n* H1\n** H2"
+	    (org-element-map tree 'headline
+	      (lambda (h) (if (org-export-excluded-from-toc-p h info) 'out 'in))
+	      info))))
+  ;; Exclude according to UNNUMBERED property.
+  (should
+   (org-test-with-parsed-data "* H1\n:PROPERTIES:\n:UNNUMBERED: notoc\n:END:"
+     (org-element-map tree 'headline
+       (lambda (h) (org-export-excluded-from-toc-p h info)) info t)))
+  ;; UNNUMBERED property is inherited, so is "notoc" value.
+  (should
+   (equal '(out out)
+	  (org-test-with-parsed-data
+	      "* H1\n:PROPERTIES:\n:UNNUMBERED: notoc\n:END:\n** H2"
+	    (org-element-map tree 'headline
+	      (lambda (h) (if (org-export-excluded-from-toc-p h info) 'out 'in))
+	      info)))))
+
+(ert-deftest test-org-export/toc-entry-backend ()
+  "Test `org-export-toc-entry-backend' specifications."
+  ;; Ignore targets.
+  (should
+   (equal "H \n"
+	  (org-test-with-temp-text "* H <<target>>"
+	    (let (org-export-registered-backends)
+	      (org-export-define-backend 'test
+		'((headline . (lambda (h _c i) (org-export-data-with-backend
+					   (org-element-property :title h)
+					   (org-export-toc-entry-backend 'test)
+					   i)))))
+	      (org-export-as 'test)))))
+  ;; Ignore footnote references.
+  (should
+   (equal "H \n"
+	  (org-test-with-temp-text "[fn:1] Definition\n* H [fn:1]"
+	    (let (org-export-registered-backends)
+	      (org-export-define-backend 'test
+		'((headline . (lambda (h _c i) (org-export-data-with-backend
+					   (org-element-property :title h)
+					   (org-export-toc-entry-backend 'test)
+					   i)))))
+	      (org-export-as 'test)))))
+  ;; Replace plain links with contents, or with path.
+  (should
+   (equal "H Org mode\n"
+	  (org-test-with-temp-text "* H [[https://orgmode.org][Org mode]]"
+	    (let (org-export-registered-backends)
+	      (org-export-define-backend 'test
+		'((headline . (lambda (h _c i) (org-export-data-with-backend
+					   (org-element-property :title h)
+					   (org-export-toc-entry-backend 'test)
+					   i)))))
+	      (org-export-as 'test)))))
+  (should
+   (equal "H https://orgmode.org\n"
+	  (org-test-with-temp-text "* H [[https://orgmode.org]]"
+	    (let (org-export-registered-backends)
+	      (org-export-define-backend 'test
+		'((headline . (lambda (h _c i) (org-export-data-with-backend
+					   (org-element-property :title h)
+					   (org-export-toc-entry-backend 'test)
+					   i)))))
+	      (org-export-as 'test)))))
+  ;; Replace radio targets with contents.
+  (should
+   (equal "H radio\n"
+	  (org-test-with-temp-text "* H <<<radio>>>"
+	    (let (org-export-registered-backends)
+	      (org-export-define-backend 'test
+		'((headline . (lambda (h _c i) (org-export-data-with-backend
+					   (org-element-property :title h)
+					   (org-export-toc-entry-backend 'test)
+					   i)))))
+	      (org-export-as 'test)))))
+  ;; With optional argument TRANSCODERS, specify other
+  ;; transformations.
+  (should
+   (equal "H bold\n"
+	  (org-test-with-temp-text "* H *bold*"
+	    (let (org-export-registered-backends)
+	      (org-export-define-backend 'test
+		'((headline . (lambda (h _c i) (org-export-data-with-backend
+						(org-element-property :title h)
+						(org-export-toc-entry-backend 'test
+						  '(bold . (lambda (_b c _i) c)))
+						i)))))
+	      (org-export-as 'test))))))
 
 
 

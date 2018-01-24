@@ -1,11 +1,11 @@
 ;;; org-list.el --- Plain lists for Org              -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2018 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;	   Bastien Guerry <bzg@gnu.org>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; Homepage: http://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;; Commentary:
@@ -106,33 +106,26 @@
 (declare-function org-element-at-point "org-element" ())
 (declare-function org-element-context "org-element" (&optional element))
 (declare-function org-element-interpret-data "org-element" (data))
-(declare-function
- org-element-lineage "org-element" (blob &optional types with-self))
+(declare-function org-element-lineage "org-element" (blob &optional types with-self))
 (declare-function org-element-macro-interpreter "org-element" (macro ##))
-(declare-function
- org-element-map "org-element"
- (data types fun &optional info first-match no-recursion with-affiliated))
+(declare-function org-element-map "org-element" (data types fun &optional info first-match no-recursion with-affiliated))
 (declare-function org-element-normalize-string "org-element" (s))
-(declare-function org-element-parse-buffer "org-element"
-		  (&optional granularity visible-only))
+(declare-function org-element-parse-buffer "org-element" (&optional granularity visible-only))
 (declare-function org-element-property "org-element" (property element))
-(declare-function org-element-put-property "org-element"
-		  (element property value))
+(declare-function org-element-put-property "org-element" (element property value))
 (declare-function org-element-set-element "org-element" (old new))
 (declare-function org-element-type "org-element" (element))
 (declare-function org-element-update-syntax "org-element" ())
-(declare-function org-entry-get "org"
-		  (pom property &optional inherit literal-nil))
+(declare-function org-end-of-meta-data "org" (&optional full))
+(declare-function org-entry-get "org" (pom property &optional inherit literal-nil))
 (declare-function org-export-create-backend "ox" (&rest rest) t)
 (declare-function org-export-data-with-backend "ox" (data backend info))
 (declare-function org-export-get-backend "ox" (name))
-(declare-function org-export-get-environment "ox"
-		  (&optional backend subtreep ext-plist))
-(declare-function org-export-get-next-element "ox"
-		  (blob info &optional n))
-(declare-function org-export-with-backend "ox"
-		  (backend data &optional contents info))
+(declare-function org-export-get-environment "ox" (&optional backend subtreep ext-plist))
+(declare-function org-export-get-next-element "ox" (blob info &optional n))
+(declare-function org-export-with-backend "ox" (backend data &optional contents info))
 (declare-function org-fix-tags-on-the-fly "org" ())
+(declare-function org-flag-region "org" (from to flag spec))
 (declare-function org-get-indentation "org" (&optional line))
 (declare-function org-get-todo-state "org" ())
 (declare-function org-in-block-p "org" (names))
@@ -154,8 +147,7 @@
 (declare-function org-timer-item "org-timer" (&optional arg))
 (declare-function org-trim "org" (s &optional keep-lead))
 (declare-function org-uniquify "org" (list))
-(declare-function outline-flag-region "outline" (from to flag))
-(declare-function outline-invisible-p "outline" (&optional pos))
+(declare-function org-invisible-p "org" (&optional pos))
 (declare-function outline-next-heading "outline" ())
 (declare-function outline-previous-heading "outline" ())
 
@@ -356,33 +348,6 @@ clearly distinguish sub-items in a list."
   :group 'org-plain-lists
   :version "24.1"
   :type 'integer)
-
-(defcustom org-list-radio-list-templates
-  '((latex-mode "% BEGIN RECEIVE ORGLST %n
-% END RECEIVE ORGLST %n
-\\begin{comment}
-#+ORGLST: SEND %n org-list-to-latex
--
-\\end{comment}\n")
-    (texinfo-mode "@c BEGIN RECEIVE ORGLST %n
-@c END RECEIVE ORGLST %n
-@ignore
-#+ORGLST: SEND %n org-list-to-texinfo
--
-@end ignore\n")
-    (html-mode "<!-- BEGIN RECEIVE ORGLST %n -->
-<!-- END RECEIVE ORGLST %n -->
-<!--
-#+ORGLST: SEND %n org-list-to-html
--
--->\n"))
-  "Templates for radio lists in different major modes.
-All occurrences of %n in a template will be replaced with the name of the
-list, obtained by prompting the user."
-  :group 'org-plain-lists
-  :type '(repeat
-	  (list (symbol :tag "Major mode")
-		(string :tag "Format"))))
 
 (defvar org-list-forbidden-blocks '("example" "verse" "src" "export")
   "Names of blocks where lists are not allowed.
@@ -2077,8 +2042,8 @@ Possible values are: `folded', `children' or `subtree'.  See
    ((eq view 'folded)
     (let ((item-end (org-list-get-item-end-before-blank item struct)))
       ;; Hide from eol
-      (outline-flag-region (save-excursion (goto-char item) (point-at-eol))
-			   item-end t)))
+      (org-flag-region (save-excursion (goto-char item) (line-end-position))
+		       item-end t 'outline)))
    ((eq view 'children)
     ;; First show everything.
     (org-list-set-item-visibility item struct 'subtree)
@@ -2091,7 +2056,7 @@ Possible values are: `folded', `children' or `subtree'.  See
    ((eq view 'subtree)
     ;; Show everything
     (let ((item-end (org-list-get-item-end item struct)))
-      (outline-flag-region item item-end nil)))))
+      (org-flag-region item item-end nil 'outline)))))
 
 (defun org-list-item-body-column (item)
   "Return column at which body of ITEM should start."
@@ -2257,7 +2222,7 @@ item is invisible."
     (unless (or (not itemp)
 		(save-excursion
 		  (goto-char itemp)
-		  (outline-invisible-p)))
+		  (org-invisible-p)))
       (if (save-excursion
 	    (goto-char itemp)
 	    (org-at-item-timer-p))
@@ -2356,27 +2321,23 @@ is an integer, 0 means `-', 1 means `+' etc.  If WHICH is
 
 (defun org-toggle-checkbox (&optional toggle-presence)
   "Toggle the checkbox in the current line.
-With prefix arg TOGGLE-PRESENCE, add or remove checkboxes.  With
-double prefix, set checkbox to [-].
+
+With prefix argument TOGGLE-PRESENCE, add or remove checkboxes.
+With a double prefix argument, set the checkbox to \"[-]\".
 
 When there is an active region, toggle status or presence of the
 first checkbox there, and make every item inside have the same
 status or presence, respectively.
 
-If the cursor is in a headline, apply this to all checkbox items
-in the text below the heading, taking as reference the first item
-in subtree, ignoring drawers."
+If point is on a headline, apply this to all checkbox items in
+the text below the heading, taking as reference the first item in
+subtree, ignoring planning line and any drawer following it."
   (interactive "P")
   (save-excursion
     (let* (singlep
 	   block-item
 	   lim-up
 	   lim-down
-	   (keyword-re (concat "^[ \t]*\\<\\(" org-scheduled-string
-			       "\\|" org-deadline-string
-			       "\\|" org-closed-string
-			       "\\|" org-clock-string "\\)"
-			       " *[[<]\\([^]>]+\\)[]>]"))
 	   (orderedp (org-entry-get nil "ORDERED"))
 	   (_bounds
 	    ;; In a region, start at first item in region.
@@ -2389,15 +2350,10 @@ in subtree, ignoring drawers."
 		  (error "No item in region"))
 		(setq lim-down (copy-marker limit))))
 	     ((org-at-heading-p)
-	      ;; On an heading, start at first item after drawers and
+	      ;; On a heading, start at first item after drawers and
 	      ;; time-stamps (scheduled, etc.).
 	      (let ((limit (save-excursion (outline-next-heading) (point))))
-		(forward-line 1)
-		(while (or (looking-at org-drawer-regexp)
-			   (looking-at keyword-re))
-		  (if (looking-at keyword-re)
-		      (forward-line 1)
-		    (re-search-forward "^[ \t]*:END:" limit nil)))
+		(org-end-of-meta-data t)
 		(if (org-list-search-forward (org-item-beginning-re) limit t)
 		    (setq lim-up (point-at-bol))
 		  (error "No item in subtree"))
@@ -2838,7 +2794,8 @@ Return t at each successful move."
 	   (t (user-error "Cannot move item"))))
 	t))))
 
-(defun org-sort-list (&optional with-case sorting-type getkey-func compare-func)
+(defun org-sort-list
+    (&optional with-case sorting-type getkey-func compare-func interactive?)
   "Sort list items.
 The cursor may be at any item of the list that should be sorted.
 Sublists are not sorted.  Checkboxes, if any, are ignored.
@@ -2864,13 +2821,15 @@ Capital letters will reverse the sort order.
 
 If the SORTING-TYPE is ?f or ?F, then GETKEY-FUNC specifies
 a function to be called with point at the beginning of the
-record.  It must return either a string or a number that should
-serve as the sorting key for that record.  It will then use
-COMPARE-FUNC to compare entries.
+record.  It must return a value that is compatible with COMPARE-FUNC,
+the function used to compare entries.
 
 Sorting is done against the visible part of the headlines, it
-ignores hidden links."
-  (interactive "P")
+ignores hidden links.
+
+A non-nil value for INTERACTIVE? is used to signal that this
+function is being called interactively."
+  (interactive (list current-prefix-arg nil nil nil t))
   (let* ((case-func (if with-case 'identity 'downcase))
          (struct (org-list-struct))
          (prevs (org-list-prevs-alist struct))
@@ -2882,23 +2841,31 @@ ignores hidden links."
 		(message
 		 "Sort plain list: [a]lpha  [n]umeric  [t]ime  [f]unc  [x]checked  A/N/T/F/X means reversed:")
 		(read-char-exclusive))))
+	 (dcst (downcase sorting-type))
 	 (getkey-func
-	  (or getkey-func
-	      (and (= (downcase sorting-type) ?f)
-		   (intern (completing-read "Sort using function: "
-					    obarray 'fboundp t nil nil))))))
+	  (and (= dcst ?f)
+	       (or getkey-func
+		   (and interactive?
+			(org-read-function "Function for extracting keys: "))
+		   (error "Missing key extractor"))))
+	 (sort-func
+	  (cond
+	   ((= dcst ?a) #'string<)
+	   ((= dcst ?f)
+	    (or compare-func
+		(and interactive?
+		     (org-read-function
+		      (concat "Function for comparing keys "
+			      "(empty for default `sort-subr' predicate): ")
+		      'allow-empty))))
+	   ((= dcst ?t) #'<)
+	   ((= dcst ?x) #'string<))))
     (message "Sorting items...")
     (save-restriction
       (narrow-to-region start end)
       (goto-char (point-min))
-      (let* ((dcst (downcase sorting-type))
-	     (case-fold-search nil)
+      (let* ((case-fold-search nil)
 	     (now (current-time))
-	     (sort-func (cond
-			 ((= dcst ?a) 'string<)
-			 ((= dcst ?f) compare-func)
-			 ((= dcst ?t) '<)
-			 ((= dcst ?x) 'string<)))
 	     (next-record (lambda ()
 			    (skip-chars-forward " \r\t\n")
 			    (or (eobp) (beginning-of-line))))
@@ -3196,76 +3163,6 @@ Point is left at list's end."
       (error "Not in a list")
     (let ((list (save-excursion (org-list-to-lisp t))))
       (insert (org-list-to-subtree list)))))
-
-(defun org-list-insert-radio-list ()
-  "Insert a radio list template appropriate for this major mode."
-  (interactive)
-  (let* ((e (cl-assoc-if #'derived-mode-p org-list-radio-list-templates))
-	 (txt (nth 1 e))
-	 name pos)
-    (unless e (error "No radio list setup defined for %s" major-mode))
-    (setq name (read-string "List name: "))
-    (while (string-match "%n" txt)
-      (setq txt (replace-match name t t txt)))
-    (or (bolp) (insert "\n"))
-    (setq pos (point))
-    (insert txt)
-    (goto-char pos)))
-
-(defun org-list-send-list (&optional maybe)
-  "Send a transformed version of this list to the receiver position.
-With argument MAYBE, fail quietly if no transformation is defined
-for this list."
-  (interactive)
-  (catch 'exit
-    (unless (org-at-item-p) (error "Not at a list item"))
-    (save-excursion
-      (let ((case-fold-search t))
-	(re-search-backward "^[ \t]*#\\+ORGLST:" nil t)
-	(unless (looking-at
-		 "[ \t]*#\\+ORGLST:[ \t]+SEND[ \t]+\\(\\S-+\\)[ \t]+\\([^ \t\n]+\\)")
-	  (if maybe (throw 'exit nil)
-	    (error "Don't know how to transform this list")))))
-    (let* ((name (regexp-quote (match-string 1)))
-	   (transform (intern (match-string 2)))
-	   (bottom-point
-	    (save-excursion
-	      (re-search-forward
-	       "\\(\\\\end{comment}\\|@end ignore\\|-->\\)" nil t)
-	      (match-beginning 0)))
-	   (top-point
-	    (progn
-	      (re-search-backward "#\\+ORGLST" nil t)
-	      (re-search-forward (org-item-beginning-re) bottom-point t)
-	      (match-beginning 0)))
-	   (plain-list (save-excursion
-			 (goto-char top-point)
-			 (org-list-to-lisp))))
-      (unless (fboundp transform)
-	(error "No such transformation function %s" transform))
-      (let ((txt (funcall transform plain-list)))
-	;; Find the insertion(s) place(s).
-	(save-excursion
-	  (goto-char (point-min))
-	  (let ((receiver-count 0)
-		(begin-re (format "BEGIN +RECEIVE +ORGLST +%s\\([ \t]\\|$\\)"
-				  name))
-		(end-re (format "END +RECEIVE +ORGLST +%s\\([ \t]\\|$\\)"
-				name)))
-	    (while (re-search-forward begin-re nil t)
-	      (cl-incf receiver-count)
-	      (let ((beg (line-beginning-position 2)))
-		(unless (re-search-forward end-re nil t)
-		  (user-error "Cannot find end of receiver location at %d" beg))
-		(beginning-of-line)
-		(delete-region beg (point))
-		(insert txt "\n")))
-	    (cond
-	     ((> receiver-count 1)
-	      (message "List converted and installed at receiver locations"))
-	     ((= receiver-count 1)
-	      (message "List converted and installed at receiver location"))
-	     (t (user-error "No valid receiver location found")))))))))
 
 (defun org-list-to-generic (list params)
   "Convert a LIST parsed through `org-list-to-lisp' to a custom format.

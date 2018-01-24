@@ -1,6 +1,6 @@
 ;;; ox-latex.el --- LaTeX Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2018 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -865,7 +865,7 @@ The function should return the string to be exported.
 
 The default function simply returns the value of CONTENTS."
   :group 'org-export-latex
-  :version "24.4"
+  :version "26.1"
   :package-version '(Org . "8.3")
   :type 'function)
 
@@ -928,7 +928,7 @@ The minted choice has possible repercussions on the preview of
 latex fragments (see `org-preview-latex-fragment').  If you run
 into previewing problems, please consult
 
-  http://orgmode.org/worg/org-tutorials/org-latex-preview.html"
+  https://orgmode.org/worg/org-tutorials/org-latex-preview.html"
   :group 'org-export-latex
   :type '(choice
 	  (const :tag "Use listings" t)
@@ -956,7 +956,7 @@ parameter for the listings package.  If the mode name and the
 listings name are the same, the language does not need an entry
 in this list - but it does not hurt if it is present."
   :group 'org-export-latex
-  :version "24.4"
+  :version "26.1"
   :package-version '(Org . "8.3")
   :type '(repeat
 	  (list
@@ -1630,15 +1630,15 @@ non-nil, only includes packages relevant to image generation, as
 specified in `org-latex-default-packages-alist' or
 `org-latex-packages-alist'."
   (let* ((class (plist-get info :latex-class))
-	 (class-options (plist-get info :latex-class-options))
-	 (header (nth 1 (assoc class (plist-get info :latex-classes))))
 	 (class-template
 	  (or template
-	      (and (stringp header)
-		   (if (not class-options) header
-		     (replace-regexp-in-string
-		      "^[ \t]*\\\\documentclass\\(\\(\\[[^]]*\\]\\)?\\)"
-		      class-options header t nil 1)))
+	      (let* ((class-options (plist-get info :latex-class-options))
+		     (header (nth 1 (assoc class (plist-get info :latex-classes)))))
+		(and (stringp header)
+		     (if (not class-options) header
+		       (replace-regexp-in-string
+			"^[ \t]*\\\\documentclass\\(\\(\\[[^]]*\\]\\)?\\)"
+			class-options header t nil 1))))
 	      (user-error "Unknown LaTeX class `%s'" class))))
     (org-latex-guess-polyglossia-language
      (org-latex-guess-babel-language
@@ -1651,7 +1651,9 @@ specified in `org-latex-default-packages-alist' or
 	 snippet?
 	 (mapconcat #'org-element-normalize-string
 		    (list (plist-get info :latex-header)
-			  (plist-get info :latex-header-extra)) ""))))
+			  (and (not snippet?)
+			       (plist-get info :latex-header-extra)))
+		    ""))))
       info)
      info)))
 
@@ -2178,19 +2180,16 @@ contextual information."
 			 (nth (1- level) '("i" "ii" "iii" "iv"))
 			 (1- count)))))
 	 (checkbox (cl-case (org-element-property :checkbox item)
-		     (on "$\\boxtimes$ ")
-		     (off "$\\square$ ")
-		     (trans "$\\boxminus$ ")))
+		     (on "$\\boxtimes$")
+		     (off "$\\square$")
+		     (trans "$\\boxminus$")))
 	 (tag (let ((tag (org-element-property :tag item)))
-		;; Check-boxes must belong to the tag.
-		(and tag (format "[{%s}] "
-				 (concat checkbox
-					 (org-export-data tag info)))))))
+		(and tag (org-export-data tag info)))))
     (concat counter
 	    "\\item"
 	    (cond
-	     (tag)
-	     (checkbox (concat " " checkbox))
+	     ((and checkbox tag) (format "[{%s %s}] " checkbox tag))
+	     ((or checkbox tag) (format "[{%s}] " (or checkbox tag)))
 	     ;; Without a tag or a check-box, if CONTENTS starts with
 	     ;; an opening square bracket, add "\relax" to "\item",
 	     ;; unless the brackets comes from an initial export
