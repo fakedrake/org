@@ -3319,13 +3319,13 @@ All available processes and theirs documents can be found in
 
 (defcustom org-preview-latex-process-alist
   '((dvipng
-     :programs ("latex" "dvipng")
+     :programs ("dvilualatex" "dvipng")
      :description "dvi > png"
      :message "you need to install the programs: latex and dvipng."
      :image-input-type "dvi"
      :image-output-type "png"
      :image-size-adjust (1.0 . 1.0)
-     :latex-compiler ("latex -interaction nonstopmode -output-directory %o %f")
+     :latex-compiler ("dvilualatex -shell-escape -interaction nonstopmode -output-directory %o %f")
      :image-converter ("dvipng -D %D -T tight -bg Transparent -o %O %f"))
     (dvisvgm
      :programs ("latex" "dvisvgm")

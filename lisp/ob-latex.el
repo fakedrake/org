@@ -243,8 +243,9 @@ This function is called by `org-babel-execute-src-block'."
 			   headers) "\n")
 	       "")
 	     (if fit
-		 (concat "\n\\begin{document}\n\\begin{preview}\n" body
-			 "\n\\end{preview}\n\\end{document}\n")
+		 (concat "\n\\begin{document}\n\\begin{preview}\n\\resizebox{\\textwidth}{!}{%\n"
+                         body
+			 "\n}\n\\end{preview}\n\\end{document}\n")
 	       (concat "\n\\begin{document}\n" body "\n\\end{document}\n"))))
           (when (file-exists-p out-file) (delete-file out-file))
 	  (let ((transient-pdf-file (org-babel-latex-tex-to-pdf tex-file)))

@@ -1,4 +1,4 @@
-;;; ox.el --- Export Framework for Org Mode          -*- lexical-binding: t; -*-
+;;; oxn.el --- Export Framework for Org Mode          -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2012-2021 Free Software Foundation, Inc.
 
@@ -2568,7 +2568,7 @@ another buffer, effectively cloning the original buffer there.
 
 The function assumes BUFFER's major mode is `org-mode'."
   (with-current-buffer buffer
-    (let ((str (org-with-wide-buffer (buffer-string)))
+    (let ((str (org-with-wide-buffer (buffer-substring-no-properties (point-min) (point-max))))
           (narrowing
            (if (org-region-active-p)
 	       (list (region-beginning) (region-end))
@@ -6440,10 +6440,11 @@ or FILE."
 		    (org-export-as
 		     ',backend ,subtreep ,visible-only ,body-only
 		     ',ext-plist)))
-	       (with-temp-buffer
-		 (insert output)
-		 (let ((coding-system-for-write ',encoding))
-		   (write-file ,file)))
+               (write-region output 'ignored ,file)
+	       ;; (with-temp-buffer
+	       ;;   (insert output)
+	       ;;   (let ((coding-system-for-write ',encoding))
+	       ;;     (write-file ,file)))
 	       (or (ignore-errors (funcall ',post-process ,file)) ,file)))
         (let ((output (org-export-as
                        backend subtreep visible-only body-only ext-plist)))
